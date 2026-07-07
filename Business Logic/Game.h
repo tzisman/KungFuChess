@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdlib>
 #include <optional>
 #include <vector>
 
@@ -11,6 +12,24 @@ struct Position {
     int row;
     int col;
 };
+
+inline bool isShapeLegal(char piece, Position from, Position to) {
+    int dr = to.row - from.row;
+    int dc = to.col - from.col;
+    if (dr == 0 && dc == 0) return false;
+
+    int adr = std::abs(dr);
+    int adc = std::abs(dc);
+
+    switch (piece) {
+        case 'K': return adr <= 1 && adc <= 1;
+        case 'R': return dr == 0 || dc == 0;
+        case 'B': return adr == adc;
+        case 'Q': return dr == 0 || dc == 0 || adr == adc;
+        case 'N': return (adr == 1 && adc == 2) || (adr == 2 && adc == 1);
+        default: return false;
+    }
+}
 
 class Board {
 public:
@@ -27,6 +46,8 @@ public:
     bool isEmpty(Position p) const { return at(p) == "."; }
 
     bool sameColor(Position a, Position b) const { return at(a)[0] == at(b)[0]; }
+
+    char pieceTypeAt(Position p) const { return at(p)[1]; }
 
     void movePiece(Position from, Position to) {
         rows_[to.row][to.col] = rows_[from.row][from.col];
@@ -57,6 +78,8 @@ public:
             selected_ = p;
             return;
         }
+
+        if (!isShapeLegal(board_.pieceTypeAt(*selected_), *selected_, p)) return;
 
         board_.movePiece(*selected_, p);
         selected_.reset();
