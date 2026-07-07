@@ -31,6 +31,10 @@ inline bool isShapeLegal(char piece, Position from, Position to) {
     }
 }
 
+inline bool requiresClearPath(char piece) {
+    return piece == 'R' || piece == 'B' || piece == 'Q';
+}
+
 class Board {
 public:
     explicit Board(std::vector<Row> rows) : rows_(std::move(rows)) {}
@@ -62,6 +66,27 @@ private:
     std::vector<Row> rows_;
 };
 
+inline bool isPathClear(const Board& board, Position from, Position to) {
+    int dr = to.row - from.row;
+    int dc = to.col - from.col;
+    int stepR = (dr > 0) - (dr < 0);
+    int stepC = (dc > 0) - (dc < 0);
+
+    Position cur{from.row + stepR, from.col + stepC};
+    while (cur.row != to.row || cur.col != to.col) {
+        if (!board.isEmpty(cur)) return false;
+        cur.row += stepR;
+        cur.col += stepC;
+    }
+    return true;
+}
+
+inline bool isMoveLegal(const Board& board, char piece, Position from, Position to) {
+    if (!isShapeLegal(piece, from, to)) return false;
+    if (requiresClearPath(piece) && !isPathClear(board, from, to)) return false;
+    return true;
+}
+
 class Game {
 public:
     explicit Game(std::vector<Row> initialRows) : board_(std::move(initialRows)) {}
@@ -79,7 +104,7 @@ public:
             return;
         }
 
-        if (!isShapeLegal(board_.pieceTypeAt(*selected_), *selected_, p)) return;
+        if (!isMoveLegal(board_, board_.pieceTypeAt(*selected_), *selected_, p)) return;
 
         board_.movePiece(*selected_, p);
         selected_.reset();
