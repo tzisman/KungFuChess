@@ -41,6 +41,10 @@ int main() {
             int x = std::stoi(tokens[1]);
             int y = std::stoi(tokens[2]);
             game.handleClickCell(pixelToCell(x, y));
+        } else if (tokens[0] == "jump" && tokens.size() == 3) {
+            int x = std::stoi(tokens[1]);
+            int y = std::stoi(tokens[2]);
+            game.handleJumpCommand(pixelToCell(x, y));
         } else if (tokens[0] == "wait" && tokens.size() == 2) {
             game.advanceClock(std::stoll(tokens[1]));
         } else if (command == "print board") {

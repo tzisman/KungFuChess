@@ -90,8 +90,10 @@ public:
 
     void movePiece(Position from, Position to) {
         rows_[to.row][to.col] = rows_[from.row][from.col];
-        rows_[from.row][from.col] = kEmptyCellToken;
+        removePiece(from);
     }
+
+    void removePiece(Position p) { rows_[p.row][p.col] = kEmptyCellToken; }
 
     void promoteToQueen(Position p) {
         rows_[p.row][p.col] = std::string(1, colorAt(p)) + pieceTypeToChar(PieceType::Queen);
@@ -119,6 +121,7 @@ inline bool isPathClear(const Board& board, Position from, Position to) {
 }
 
 constexpr long long kSquareTravelMs = 1000;
+constexpr long long kJumpDurationMs = 1000;
 
 inline int chebyshevDistance(Position from, Position to) {
     return std::max(std::abs(to.row - from.row), std::abs(to.col - from.col));
@@ -160,6 +163,12 @@ struct PendingMove {
     long long arrivalMs;
 };
 
+struct PendingJump {
+    Position cell;
+    char color;
+    long long expiryMs;
+};
+
 class Game {
 public:
     explicit Game(std::vector<Row> initialRows) : board_(std::move(initialRows)) {}
@@ -176,6 +185,14 @@ public:
         if (tryReselectSameColor(p)) return;
 
         tryMove(p);
+    }
+
+    void handleJumpCommand(Position p) {
+        if (isOver()) return;
+        if (!board_.inBounds(p)) return;
+        if (!canJump(p)) return;
+
+        pendingJump_ = PendingJump{p, board_.colorAt(p), clockMs_ + kJumpDurationMs};
     }
 
     void advanceClock(long long ms) {
@@ -196,6 +213,21 @@ private:
 
     bool hasPieceInTransit() const { return pendingMove_.has_value(); }
 
+    bool isJumping(Position p) const {
+        return pendingJump_.has_value() && pendingJump_->cell == p;
+    }
+
+    bool canJump(Position p) const {
+        if (board_.isEmpty(p)) return false;
+        if (isPending(p)) return false;
+        if (isJumping(p)) return false;
+        return true;
+    }
+
+    bool isEnemyJumpAt(Position p, char movingColor) const {
+        return pendingJump_.has_value() && pendingJump_->cell == p && pendingJump_->color != movingColor;
+    }
+
     void trySelect(Position p) {
         if (!board_.isEmpty(p) && !isPending(p)) selected_ = p;
     }
@@ -208,6 +240,7 @@ private:
 
     void tryMove(Position p) {
         if (hasPieceInTransit()) return;
+        if (isJumping(*selected_)) return;
         if (!isMoveLegal(board_, board_.pieceTypeAt(*selected_), board_.colorAt(*selected_), *selected_, p)) return;
 
         pendingMove_ = PendingMove{*selected_, p, clockMs_ + travelDurationMs(*selected_, p)};
@@ -216,11 +249,23 @@ private:
 
     void applyArrivedMoves() {
         if (pendingMove_.has_value() && pendingMove_->arrivalMs <= clockMs_) {
-            checkForKingCapture(pendingMove_->from, pendingMove_->to);
-            board_.movePiece(pendingMove_->from, pendingMove_->to);
-            checkForPromotion(pendingMove_->to);
+            resolveArrivingMove(pendingMove_->from, pendingMove_->to);
             pendingMove_.reset();
         }
+        if (pendingJump_.has_value() && pendingJump_->expiryMs <= clockMs_) {
+            pendingJump_.reset();
+        }
+    }
+
+    void resolveArrivingMove(Position from, Position to) {
+        if (isEnemyJumpAt(to, board_.colorAt(from))) {
+            board_.removePiece(from);
+            pendingJump_.reset();
+            return;
+        }
+        checkForKingCapture(from, to);
+        board_.movePiece(from, to);
+        checkForPromotion(to);
     }
 
     void checkForKingCapture(Position from, Position to) {
@@ -241,6 +286,7 @@ private:
     std::optional<Position> selected_;
     long long clockMs_ = 0;
     std::optional<PendingMove> pendingMove_;
+    std::optional<PendingJump> pendingJump_;
     std::optional<char> winner_;
 };
 
