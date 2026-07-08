@@ -1,21 +1,15 @@
 #include <iostream>
 #include <vector>
 
-#include "Business Logic/BoardParser.h"
-#include "Business Logic/Game.h"
+#include "App/CommandParser.hpp"
+#include "App/CommandRunner.hpp"
+#include "Business Logic/BoardParser.hpp"
+#include "Business Logic/Game.hpp"
 
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
 #endif
-
-namespace {
-
-kfc::logic::Position pixelToCell(int x, int y) {
-    return kfc::logic::Position{y / 100, x / 100};
-}
-
-}
 
 int main() {
 #ifdef _WIN32
@@ -32,23 +26,11 @@ int main() {
     }
 
     kfc::logic::Game game(std::move(board));
+    kfc::app::CommandRunner runner(game, std::cout);
 
-    for (const auto& command : commands) {
-        std::vector<std::string> tokens = kfc::logic::tokenize(command);
-        if (tokens.empty()) continue;
-
-        if (tokens[0] == "click" && tokens.size() == 3) {
-            int x = std::stoi(tokens[1]);
-            int y = std::stoi(tokens[2]);
-            game.handleClickCell(pixelToCell(x, y));
-        } else if (tokens[0] == "jump" && tokens.size() == 3) {
-            int x = std::stoi(tokens[1]);
-            int y = std::stoi(tokens[2]);
-            game.handleJumpCommand(pixelToCell(x, y));
-        } else if (tokens[0] == "wait" && tokens.size() == 2) {
-            game.advanceClock(std::stoll(tokens[1]));
-        } else if (command == "print board") {
-            kfc::logic::printBoard(game.board(), std::cout);
+    for (const auto& line : commands) {
+        if (auto command = kfc::app::parseCommand(line)) {
+            runner.run(*command);
         }
     }
 

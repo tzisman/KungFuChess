@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Greenfield project — no source code, build system, or tests exist yet. The sections below describe the **intended** architecture and rules the implementation must follow. When adding the first build tooling (CMake is the expected default for a C++ project of this shape), update this file with the actual build/lint/test commands, including how to run a single test.
+Greenfield project — no source code, build system, or tests exist yet. The sections below describe the **intended** architecture and rules the implementation must follow.
 
 ## Game Overview
 
