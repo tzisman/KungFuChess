@@ -18,7 +18,22 @@ struct Position {
 
 inline bool operator==(Position a, Position b) { return a.row == b.row && a.col == b.col; }
 
-inline bool isShapeLegal(PieceType piece, char color, Position from, Position to) {
+inline int pawnDirection(char color) { return (color == kWhiteColor) ? -1 : 1; }
+
+// Row index a pawn's start row is inset from its own back edge of the board.
+// 0 = pawns start right on the edge row; bump to 1 for a standard-chess back rank in front of them.
+constexpr int kPawnStartRowInsetFromEdge = 0;
+
+inline int pawnStartRow(char color, int boardHeight) {
+    return (color == kWhiteColor) ? (boardHeight - 1 - kPawnStartRowInsetFromEdge)
+                                   : kPawnStartRowInsetFromEdge;
+}
+
+inline int pawnPromotionRow(char color, int boardHeight) {
+    return (color == kWhiteColor) ? 0 : boardHeight - 1;
+}
+
+inline bool isShapeLegal(PieceType piece, char color, Position from, Position to, int boardHeight) {
     int dr = to.row - from.row;
     int dc = to.col - from.col;
     if (dr == 0 && dc == 0) return false;
@@ -33,16 +48,20 @@ inline bool isShapeLegal(PieceType piece, char color, Position from, Position to
         case PieceType::Queen: return dr == 0 || dc == 0 || adr == adc;
         case PieceType::Knight: return (adr == 1 && adc == 2) || (adr == 2 && adc == 1);
         case PieceType::Pawn: {
-            int dir = (color == kWhiteColor) ? -1 : 1;
-            if (dr != dir) return false;
-            return adc <= 1;
+            int dir = pawnDirection(color);
+            if (adc == 1) return dr == dir;
+            if (dc != 0) return false;
+            if (dr == dir) return true;
+            if (dr == 2 * dir) return from.row == pawnStartRow(color, boardHeight);
+            return false;
         }
         default: return false;
     }
 }
 
 inline bool requiresClearPath(PieceType piece) {
-    return piece == PieceType::Rook || piece == PieceType::Bishop || piece == PieceType::Queen;
+    return piece == PieceType::Rook || piece == PieceType::Bishop || piece == PieceType::Queen ||
+           piece == PieceType::Pawn;
 }
 
 class Board {
@@ -72,6 +91,10 @@ public:
     void movePiece(Position from, Position to) {
         rows_[to.row][to.col] = rows_[from.row][from.col];
         rows_[from.row][from.col] = kEmptyCellToken;
+    }
+
+    void promoteToQueen(Position p) {
+        rows_[p.row][p.col] = std::string(1, colorAt(p)) + pieceTypeToChar(PieceType::Queen);
     }
 
 private:
@@ -106,7 +129,7 @@ inline long long travelDurationMs(Position from, Position to) {
 }
 
 inline bool isMoveLegal(const Board& board, PieceType piece, char color, Position from, Position to) {
-    if (!isShapeLegal(piece, color, from, to)) return false;
+    if (!isShapeLegal(piece, color, from, to, board.height())) return false;
     if (requiresClearPath(piece) && !isPathClear(board, from, to)) return false;
 
     if (piece == PieceType::Pawn) {
@@ -195,6 +218,7 @@ private:
         if (pendingMove_.has_value() && pendingMove_->arrivalMs <= clockMs_) {
             checkForKingCapture(pendingMove_->from, pendingMove_->to);
             board_.movePiece(pendingMove_->from, pendingMove_->to);
+            checkForPromotion(pendingMove_->to);
             pendingMove_.reset();
         }
     }
@@ -202,6 +226,14 @@ private:
     void checkForKingCapture(Position from, Position to) {
         if (board_.isKing(to)) {
             winner_ = board_.colorAt(from);
+        }
+    }
+
+    void checkForPromotion(Position to) {
+        if (board_.pieceTypeAt(to) != PieceType::Pawn) return;
+        char color = board_.colorAt(to);
+        if (to.row == pawnPromotionRow(color, board_.height())) {
+            board_.promoteToQueen(to);
         }
     }
 
