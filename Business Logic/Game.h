@@ -161,11 +161,10 @@ public:
 
 private:
     bool isPending(Position p) const {
-        for (const auto& move : pendingMoves_) {
-            if (move.from == p) return true;
-        }
-        return false;
+        return pendingMove_.has_value() && pendingMove_->from == p;
     }
+
+    bool hasPieceInTransit() const { return pendingMove_.has_value(); }
 
     void trySelect(Position p) {
         if (!board_.isEmpty(p) && !isPending(p)) selected_ = p;
@@ -178,26 +177,24 @@ private:
     }
 
     void tryMove(Position p) {
+        if (hasPieceInTransit()) return;
         if (!isMoveLegal(board_, board_.pieceTypeAt(*selected_), board_.colorAt(*selected_), *selected_, p)) return;
 
-        pendingMoves_.push_back(PendingMove{*selected_, p, clockMs_ + travelDurationMs(*selected_, p)});
+        pendingMove_ = PendingMove{*selected_, p, clockMs_ + travelDurationMs(*selected_, p)};
         selected_.reset();
     }
 
     void applyArrivedMoves() {
-        for (const auto& move : pendingMoves_) {
-            if (move.arrivalMs <= clockMs_) board_.movePiece(move.from, move.to);
+        if (pendingMove_.has_value() && pendingMove_->arrivalMs <= clockMs_) {
+            board_.movePiece(pendingMove_->from, pendingMove_->to);
+            pendingMove_.reset();
         }
-        pendingMoves_.erase(
-            std::remove_if(pendingMoves_.begin(), pendingMoves_.end(),
-                            [this](const PendingMove& move) { return move.arrivalMs <= clockMs_; }),
-            pendingMoves_.end());
     }
 
     Board board_;
     std::optional<Position> selected_;
     long long clockMs_ = 0;
-    std::vector<PendingMove> pendingMoves_;
+    std::optional<PendingMove> pendingMove_;
 };
 
 }
