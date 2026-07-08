@@ -28,6 +28,17 @@ The guiding principle: **Business Logic must be completely decoupled from GUI an
 
 A non-functional/aspirational goal is scalability toward millions of concurrent players. This is architectural pressure to keep layers cleanly separated and the server well-designed — not a mandate to actually implement at that scale.
 
+## Code Quality Rules
+
+Beyond layer separation, all code — Business Logic above all — must follow:
+
+- **DRY** — every piece of logic/domain knowledge is implemented in exactly one place. If a fact (e.g. "which letters are valid piece types") is needed in two places, define it once and reference it from both; do not let two independent switch/if chains encode the same rule, since they will drift out of sync.
+- **SRP** — every function does exactly one thing. A function that validates, parses, transforms, and mutates state in one body should be split into named steps, each doing one of those things.
+- **No hardcoded constants or strings in Business Logic** — piece-type letters, color markers, the empty-cell token, board dimensions, cooldown durations, piece costs, etc. must live in named constants/enums/config, never as inline literals (`'K'`, `"."`, `'w'`, `100`) scattered through the logic.
+- **Encapsulation** — classes and functions expose behavior, not internal representation. Don't return raw internal containers (e.g. a `vector<vector<string>>` board) from an accessor and let callers pattern-match against the encoding; expose purpose-built methods instead.
+
+Treat a violation of any of these as a design defect to fix, not a style nit — review new/changed code against this list before considering a change complete.
+
 ## Testing strategy
 
 Each layer is verified by tests appropriate to it:

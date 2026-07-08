@@ -2,9 +2,11 @@
 
 #include <cstdlib>
 #include <optional>
+#include <ostream>
 #include <vector>
 
 #include "BoardParser.h"
+#include "PieceTypes.h"
 
 namespace kfc::logic {
 
@@ -13,7 +15,7 @@ struct Position {
     int col;
 };
 
-inline bool isShapeLegal(char piece, Position from, Position to) {
+inline bool isShapeLegal(PieceType piece, char color, Position from, Position to) {
     int dr = to.row - from.row;
     int dc = to.col - from.col;
     if (dr == 0 && dc == 0) return false;
@@ -22,17 +24,22 @@ inline bool isShapeLegal(char piece, Position from, Position to) {
     int adc = std::abs(dc);
 
     switch (piece) {
-        case 'K': return adr <= 1 && adc <= 1;
-        case 'R': return dr == 0 || dc == 0;
-        case 'B': return adr == adc;
-        case 'Q': return dr == 0 || dc == 0 || adr == adc;
-        case 'N': return (adr == 1 && adc == 2) || (adr == 2 && adc == 1);
+        case PieceType::King: return adr <= 1 && adc <= 1;
+        case PieceType::Rook: return dr == 0 || dc == 0;
+        case PieceType::Bishop: return adr == adc;
+        case PieceType::Queen: return dr == 0 || dc == 0 || adr == adc;
+        case PieceType::Knight: return (adr == 1 && adc == 2) || (adr == 2 && adc == 1);
+        case PieceType::Pawn: {
+            int dir = (color == kWhiteColor) ? -1 : 1;
+            if (dr != dir) return false;
+            return adc <= 1;
+        }
         default: return false;
     }
 }
 
-inline bool requiresClearPath(char piece) {
-    return piece == 'R' || piece == 'B' || piece == 'Q';
+inline bool requiresClearPath(PieceType piece) {
+    return piece == PieceType::Rook || piece == PieceType::Bishop || piece == PieceType::Queen;
 }
 
 class Board {
@@ -47,18 +54,20 @@ public:
         return p.row >= 0 && p.row < height() && p.col >= 0 && p.col < width();
     }
 
-    bool isEmpty(Position p) const { return at(p) == "."; }
+    bool isEmpty(Position p) const { return at(p) == kEmptyCellToken; }
 
-    bool sameColor(Position a, Position b) const { return at(a)[0] == at(b)[0]; }
+    bool sameColor(Position a, Position b) const { return colorAt(a) == colorAt(b); }
 
-    char pieceTypeAt(Position p) const { return at(p)[1]; }
+    PieceType pieceTypeAt(Position p) const { return *charToPieceType(at(p)[1]); }
+
+    char colorAt(Position p) const { return at(p)[0]; }
+
+    const std::string& tokenAt(Position p) const { return at(p); }
 
     void movePiece(Position from, Position to) {
         rows_[to.row][to.col] = rows_[from.row][from.col];
-        rows_[from.row][from.col] = ".";
+        rows_[from.row][from.col] = kEmptyCellToken;
     }
-
-    const std::vector<Row>& rows() const { return rows_; }
 
 private:
     const std::string& at(Position p) const { return rows_[p.row][p.col]; }
@@ -81,10 +90,30 @@ inline bool isPathClear(const Board& board, Position from, Position to) {
     return true;
 }
 
-inline bool isMoveLegal(const Board& board, char piece, Position from, Position to) {
-    if (!isShapeLegal(piece, from, to)) return false;
+inline bool isMoveLegal(const Board& board, PieceType piece, char color, Position from, Position to) {
+    if (!isShapeLegal(piece, color, from, to)) return false;
     if (requiresClearPath(piece) && !isPathClear(board, from, to)) return false;
+
+    if (piece == PieceType::Pawn) {
+        bool isDiagonal = (to.col != from.col);
+        if (isDiagonal) {
+            if (board.isEmpty(to)) return false;
+        } else {
+            if (!board.isEmpty(to)) return false;
+        }
+    }
+
     return true;
+}
+
+inline void printBoard(const Board& board, std::ostream& out) {
+    for (int row = 0; row < board.height(); ++row) {
+        for (int col = 0; col < board.width(); ++col) {
+            if (col > 0) out << ' ';
+            out << board.tokenAt(Position{row, col});
+        }
+        out << '\n';
+    }
 }
 
 class Game {
@@ -95,19 +124,13 @@ public:
         if (!board_.inBounds(p)) return;
 
         if (!selected_.has_value()) {
-            if (!board_.isEmpty(p)) selected_ = p;
+            trySelect(p);
             return;
         }
 
-        if (!board_.isEmpty(p) && board_.sameColor(*selected_, p)) {
-            selected_ = p;
-            return;
-        }
+        if (tryReselectSameColor(p)) return;
 
-        if (!isMoveLegal(board_, board_.pieceTypeAt(*selected_), *selected_, p)) return;
-
-        board_.movePiece(*selected_, p);
-        selected_.reset();
+        tryMove(p);
     }
 
     void advanceClock(long long ms) { clockMs_ += ms; }
@@ -115,6 +138,23 @@ public:
     const Board& board() const { return board_; }
 
 private:
+    void trySelect(Position p) {
+        if (!board_.isEmpty(p)) selected_ = p;
+    }
+
+    bool tryReselectSameColor(Position p) {
+        if (board_.isEmpty(p) || !board_.sameColor(*selected_, p)) return false;
+        selected_ = p;
+        return true;
+    }
+
+    void tryMove(Position p) {
+        if (!isMoveLegal(board_, board_.pieceTypeAt(*selected_), board_.colorAt(*selected_), *selected_, p)) return;
+
+        board_.movePiece(*selected_, p);
+        selected_.reset();
+    }
+
     Board board_;
     std::optional<Position> selected_;
     long long clockMs_ = 0;

@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "PieceTypes.h"
+
 namespace kfc::logic {
 
 using Row = std::vector<std::string>;
@@ -30,40 +32,37 @@ inline std::vector<std::string> tokenize(const std::string& line) {
 }
 
 inline bool isValidToken(const std::string& token) {
-    if (token == ".") return true;
+    if (token == kEmptyCellToken) return true;
     if (token.size() != 2) return false;
-    char color = token[0];
-    char piece = token[1];
-    if (color != 'w' && color != 'b') return false;
-    switch (piece) {
-        case 'K': case 'Q': case 'R': case 'B': case 'N': case 'P':
-            return true;
-        default:
-            return false;
+    return isValidColor(token[0]) && charToPieceType(token[1]).has_value();
+}
+
+inline void skipToBoardMarker(std::istream& in) {
+    std::string line;
+    while (std::getline(in, line)) {
+        if (trim(line) == "Board:") return;
     }
 }
 
-
-inline std::vector<Row> parseBoard(std::istream& in, std::vector<std::string>& commands) {
-    std::string line;
-
-    while (std::getline(in, line)) {
-        if (trim(line) == "Board:") break;
-    }
-
+inline std::vector<Row> readBoardRows(std::istream& in) {
     std::vector<Row> rows;
+    std::string line;
     while (std::getline(in, line)) {
         std::string trimmed = trim(line);
         if (trimmed == "Commands:") break;
         if (trimmed.empty()) continue;
+        rows.push_back(tokenize(trimmed));
+    }
+    return rows;
+}
 
-        Row row = tokenize(trimmed);
+inline void validateBoard(const std::vector<Row>& rows) {
+    for (const auto& row : rows) {
         for (const auto& token : row) {
             if (!isValidToken(token)) {
                 throw ParseError{"UNKNOWN_TOKEN"};
             }
         }
-        rows.push_back(row);
     }
 
     if (!rows.empty()) {
@@ -74,23 +73,24 @@ inline std::vector<Row> parseBoard(std::istream& in, std::vector<std::string>& c
             }
         }
     }
+}
 
+inline std::vector<std::string> readCommands(std::istream& in) {
+    std::vector<std::string> commands;
+    std::string line;
     while (std::getline(in, line)) {
         std::string trimmed = trim(line);
         if (!trimmed.empty()) commands.push_back(trimmed);
     }
+    return commands;
+}
 
+inline std::vector<Row> parseBoard(std::istream& in, std::vector<std::string>& commands) {
+    skipToBoardMarker(in);
+    std::vector<Row> rows = readBoardRows(in);
+    validateBoard(rows);
+    commands = readCommands(in);
     return rows;
 }
 
-inline void printBoard(const std::vector<Row>& rows, std::ostream& out) {
-    for (const auto& row : rows) {
-        for (size_t i = 0; i < row.size(); ++i) {
-            if (i > 0) out << ' ';
-            out << row[i];
-        }
-        out << '\n';
-    }
 }
-
-} 

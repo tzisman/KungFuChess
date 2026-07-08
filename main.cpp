@@ -44,7 +44,7 @@ int main() {
         } else if (tokens[0] == "wait" && tokens.size() == 2) {
             game.advanceClock(std::stoll(tokens[1]));
         } else if (command == "print board") {
-            kfc::logic::printBoard(game.board().rows(), std::cout);
+            kfc::logic::printBoard(game.board(), std::cout);
         }
     }
 
