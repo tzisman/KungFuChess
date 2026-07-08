@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdlib>
 #include <optional>
 #include <ostream>
@@ -14,6 +15,8 @@ struct Position {
     int row;
     int col;
 };
+
+inline bool operator==(Position a, Position b) { return a.row == b.row && a.col == b.col; }
 
 inline bool isShapeLegal(PieceType piece, char color, Position from, Position to) {
     int dr = to.row - from.row;
@@ -90,6 +93,16 @@ inline bool isPathClear(const Board& board, Position from, Position to) {
     return true;
 }
 
+constexpr long long kSquareTravelMs = 1000;
+
+inline int chebyshevDistance(Position from, Position to) {
+    return std::max(std::abs(to.row - from.row), std::abs(to.col - from.col));
+}
+
+inline long long travelDurationMs(Position from, Position to) {
+    return chebyshevDistance(from, to) * kSquareTravelMs;
+}
+
 inline bool isMoveLegal(const Board& board, PieceType piece, char color, Position from, Position to) {
     if (!isShapeLegal(piece, color, from, to)) return false;
     if (requiresClearPath(piece) && !isPathClear(board, from, to)) return false;
@@ -116,6 +129,12 @@ inline void printBoard(const Board& board, std::ostream& out) {
     }
 }
 
+struct PendingMove {
+    Position from;
+    Position to;
+    long long arrivalMs;
+};
+
 class Game {
 public:
     explicit Game(std::vector<Row> initialRows) : board_(std::move(initialRows)) {}
@@ -133,17 +152,27 @@ public:
         tryMove(p);
     }
 
-    void advanceClock(long long ms) { clockMs_ += ms; }
+    void advanceClock(long long ms) {
+        clockMs_ += ms;
+        applyArrivedMoves();
+    }
 
     const Board& board() const { return board_; }
 
 private:
+    bool isPending(Position p) const {
+        for (const auto& move : pendingMoves_) {
+            if (move.from == p) return true;
+        }
+        return false;
+    }
+
     void trySelect(Position p) {
-        if (!board_.isEmpty(p)) selected_ = p;
+        if (!board_.isEmpty(p) && !isPending(p)) selected_ = p;
     }
 
     bool tryReselectSameColor(Position p) {
-        if (board_.isEmpty(p) || !board_.sameColor(*selected_, p)) return false;
+        if (board_.isEmpty(p) || isPending(p) || !board_.sameColor(*selected_, p)) return false;
         selected_ = p;
         return true;
     }
@@ -151,13 +180,24 @@ private:
     void tryMove(Position p) {
         if (!isMoveLegal(board_, board_.pieceTypeAt(*selected_), board_.colorAt(*selected_), *selected_, p)) return;
 
-        board_.movePiece(*selected_, p);
+        pendingMoves_.push_back(PendingMove{*selected_, p, clockMs_ + travelDurationMs(*selected_, p)});
         selected_.reset();
+    }
+
+    void applyArrivedMoves() {
+        for (const auto& move : pendingMoves_) {
+            if (move.arrivalMs <= clockMs_) board_.movePiece(move.from, move.to);
+        }
+        pendingMoves_.erase(
+            std::remove_if(pendingMoves_.begin(), pendingMoves_.end(),
+                            [this](const PendingMove& move) { return move.arrivalMs <= clockMs_; }),
+            pendingMoves_.end());
     }
 
     Board board_;
     std::optional<Position> selected_;
     long long clockMs_ = 0;
+    std::vector<PendingMove> pendingMoves_;
 };
 
 }
