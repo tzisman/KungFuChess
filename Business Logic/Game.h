@@ -67,6 +67,8 @@ public:
 
     const std::string& tokenAt(Position p) const { return at(p); }
 
+    bool isKing(Position p) const { return !isEmpty(p) && pieceTypeAt(p) == PieceType::King; }
+
     void movePiece(Position from, Position to) {
         rows_[to.row][to.col] = rows_[from.row][from.col];
         rows_[from.row][from.col] = kEmptyCellToken;
@@ -140,6 +142,7 @@ public:
     explicit Game(std::vector<Row> initialRows) : board_(std::move(initialRows)) {}
 
     void handleClickCell(Position p) {
+        if (isOver()) return;
         if (!board_.inBounds(p)) return;
 
         if (!selected_.has_value()) {
@@ -158,6 +161,10 @@ public:
     }
 
     const Board& board() const { return board_; }
+
+    bool isOver() const { return winner_.has_value(); }
+
+    std::optional<char> winner() const { return winner_; }
 
 private:
     bool isPending(Position p) const {
@@ -186,8 +193,15 @@ private:
 
     void applyArrivedMoves() {
         if (pendingMove_.has_value() && pendingMove_->arrivalMs <= clockMs_) {
+            checkForKingCapture(pendingMove_->from, pendingMove_->to);
             board_.movePiece(pendingMove_->from, pendingMove_->to);
             pendingMove_.reset();
+        }
+    }
+
+    void checkForKingCapture(Position from, Position to) {
+        if (board_.isKing(to)) {
+            winner_ = board_.colorAt(from);
         }
     }
 
@@ -195,6 +209,7 @@ private:
     std::optional<Position> selected_;
     long long clockMs_ = 0;
     std::optional<PendingMove> pendingMove_;
+    std::optional<char> winner_;
 };
 
 }
