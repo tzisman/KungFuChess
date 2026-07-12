@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Greenfield project — no source code, build system, or tests exist yet. The sections below describe the **intended** architecture and rules the implementation must follow.
+The project is currently undergoing a **major refactoring of the entire folder/directory structure**, restructuring the codebase around explicit **design patterns** and the strict layer separation described below. Expect files and directories to be reorganized; when adding or moving code, follow the intended architecture and design-pattern conventions rather than the previous layout. The sections below describe the **intended** architecture and rules the implementation must follow.
+
+The target layout (see **Project Structure** below) has been scaffolded under `kungfu_chess/` and `tests/`. During migration it coexists with the legacy `App/` and `Business Logic/` directories; new work goes into the new layout, and the legacy directories are deleted only once everything has been migrated across.
 
 ## Game Overview
 
@@ -28,6 +30,55 @@ The guiding principle: **Business Logic must be completely decoupled from GUI an
 
 A non-functional/aspirational goal is scalability toward millions of concurrent players. This is architectural pressure to keep layers cleanly separated and the server well-designed — not a mandate to actually implement at that scale.
 
+## Project Structure
+
+The codebase is being migrated to the layout below. The source modules live at the repository root, each mapping onto one of the architectural layers; `tests/` mirrors them. Add new code to the module that matches its responsibility — never widen a module's job to avoid creating the right one.
+
+```
+model/                # Business Logic — pure domain data & state
+  position            # a board coordinate
+  piece               # piece identity (type, color)
+  board               # the grid of pieces + safe accessors
+  game_state          # authoritative game state (no orchestration)
+rules/                # Business Logic — the rules of the game
+  piece_rules         # per-type movement/legality rules
+  rule_engine         # orchestrates the rules into a legality decision
+realtime/             # Business Logic — the real-time / simultaneous mechanics
+  motion              # travel time, cooldown, jump durations
+  real_time_arbiter   # pending moves/jumps, the clock, arrival resolution
+engine/               # Business Logic — top-level coordination
+  game_engine         # drives state + rules + realtime; the logic entry point
+input/                # GUI (input side) — no game rules
+  board_mapper        # pixel <-> cell mapping (display-coupled)
+  controller          # turns raw input into engine commands
+io/                   # serialization — board text in/out (not display, not rules)
+  board_parser        # text -> board + commands
+  board_printer       # board -> text
+view/                 # GUI (output side) — display only
+  renderer            # renders board state
+  image_view          # graphical view
+texttests/            # scripted end-to-end test harness
+  script_parser
+  script_runner
+main.cpp              # composition root wiring the layers together
+
+tests/
+  unit/               # Business Logic + seams, each unit tested in isolation
+    test_position  test_board  test_piece_rules  test_rule_engine
+    test_real_time_arbiter  test_game_engine  test_board_mapper
+    test_controller  test_board_parser  test_board_printer
+```
+
+Layer mapping: `model` + `rules` + `realtime` + `engine` are **Business Logic**; `input` + `view` are the **GUI**. `io` is a serialization boundary, not a rules or display layer.
+
+### Naming conventions
+
+- **Files & directories:** `snake_case`, one module per name, paired `.hpp` / `.cpp` (header-only modules may omit the `.cpp`). Test files are `.cpp` only, named `test_<module>`.
+- **Types (classes, structs, enums):** `PascalCase`.
+- **Functions & variables:** `camelCase`; private members carry a trailing underscore (`board_`).
+- **Constants / enum values:** `kPascalCase` (e.g. `kSquareTravelMs`).
+- **Namespaces:** `kfc` at the root, one nested namespace per layer (`kfc::model`, `kfc::rules`, `kfc::realtime`, `kfc::engine`, `kfc::input`, `kfc::view`, `kfc::io`). Business Logic namespaces must never `#include` from `input`/`view`.
+
 ## Code Quality Rules
 
 Beyond layer separation, all code — Business Logic above all — must follow:
@@ -40,6 +91,8 @@ Beyond layer separation, all code — Business Logic above all — must follow:
 Treat a violation of any of these as a design defect to fix, not a style nit — review new/changed code against this list before considering a change complete.
 
 ## Testing strategy
+
+The test framework is **[doctest](https://github.com/doctest/doctest)** — all unit tests under `tests/` are written with it.
 
 Each layer is verified by tests appropriate to it:
 
