@@ -11,12 +11,9 @@ using PieceId = int;
 enum class Color { kWhite, kBlack };
 enum class PieceKind { kKing, kQueen, kRook, kBishop, kKnight, kPawn };
 
-// Lifecycle flag only: no path, destination, timing, or arrival. Those belong
-// to Motion and RealTimeArbiter.
+
 enum class PieceState { kIdle, kMoving, kCaptured };
 
-// A piece's identity (id, color, kind) is fixed at construction; only its cell
-// and lifecycle state change, and only from the outside.
 class Piece {
 public:
     Piece(PieceId id, Color color, PieceKind kind, Position cell,

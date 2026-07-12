@@ -87,6 +87,7 @@ Beyond layer separation, all code — Business Logic above all — must follow:
 - **SRP** — every function does exactly one thing. A function that validates, parses, transforms, and mutates state in one body should be split into named steps, each doing one of those things.
 - **No hardcoded constants or strings in Business Logic** — piece-type letters, color markers, the empty-cell token, board dimensions, cooldown durations, piece costs, etc. must live in named constants/enums/config, never as inline literals (`'K'`, `"."`, `'w'`, `100`) scattered through the logic.
 - **Encapsulation** — classes and functions expose behavior, not internal representation. Don't return raw internal containers (e.g. a `vector<vector<string>>` board) from an accessor and let callers pattern-match against the encoding; expose purpose-built methods instead.
+- **Minimal comments** — write as few comments as possible; let clear names and small, single-purpose functions carry the meaning. Add a comment only when it explains *why* something non-obvious is done, never to restate *what* the code already says. Prefer renaming or refactoring over adding an explanatory comment.
 
 Treat a violation of any of these as a design defect to fix, not a style nit — review new/changed code against this list before considering a change complete.
 

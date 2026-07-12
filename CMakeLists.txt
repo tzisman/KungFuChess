@@ -17,8 +17,10 @@ add_executable(unit_tests
     tests/test_main.cpp
     tests/unit/test_position.cpp
     tests/unit/test_piece.cpp
+    tests/unit/test_board.cpp
     model/position.cpp
     model/piece.cpp
+    model/board.cpp
 )
 target_include_directories(unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(unit_tests PRIVATE doctest)
