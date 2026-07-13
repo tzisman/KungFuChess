@@ -20,7 +20,7 @@ std::optional<model::Piece> GameSnapshot::pieceAt(model::Position cell) const {
 bool GameSnapshot::isOver() const { return over_; }
 
 GameEngine::GameEngine(model::Board board)
-    : board_(std::move(board)), arbiter_(board_) {}
+    : state_(std::move(board)), arbiter_(state_.board()) {}
 
 MoveResult GameEngine::requestMove(model::Position from, model::Position to) {
     if (state_.isOver()) {
@@ -31,7 +31,7 @@ MoveResult GameEngine::requestMove(model::Position from, model::Position to) {
         return {false, kReasonMotionInProgress};
     }
 
-    rules::MoveValidation validation = ruleEngine_.validate(board_, from, to);
+    rules::MoveValidation validation = ruleEngine_.validate(state_.board(), from, to);
     if (!validation.isValid) {
         return {false, rules::reasonCode(validation.reason)};
     }
@@ -47,14 +47,14 @@ void GameEngine::wait(int ms) {
             state_.markOver();
             return;
         }
-        if (auto promoted = rules::promotedKind(board_, board_.pieceAt(report.destination).value())) {
-            board_.setPieceKind(report.destination, *promoted);
+        if (auto promoted = rules::promotedKind(state_.board(), state_.board().pieceAt(report.destination).value())) {
+            state_.board().setPieceKind(report.destination, *promoted);
         }
     }
 }
 
 GameSnapshot GameEngine::snapshot() const {
-    return {board_, state_.isOver()};
+    return {state_.board(), state_.isOver()};
 }
 
 bool GameEngine::isOver() const { return state_.isOver(); }

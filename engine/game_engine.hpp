@@ -48,7 +48,6 @@ public:
     bool isOver() const;
 
 private:
-    model::Board board_;
     model::GameState state_;
     rules::RuleEngine ruleEngine_;
     realtime::RealTimeArbiter arbiter_;

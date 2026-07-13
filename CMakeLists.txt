@@ -11,8 +11,31 @@ enable_testing()
 add_library(doctest INTERFACE)
 target_include_directories(doctest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 
-# Unit tests. As each Business-Logic module is migrated into the new layout,
-# add its source and matching tests/unit/test_<module>.cpp to this target.
+# All production sources across the layers, shared by the app and the tests.
+add_library(kfc
+    model/position.cpp
+    model/piece.cpp
+    model/board.cpp
+    rules/piece_rules.cpp
+    rules/rule_engine.cpp
+    realtime/motion.cpp
+    realtime/real_time_arbiter.cpp
+    engine/game_engine.cpp
+    input/board_mapper.cpp
+    input/controller.cpp
+    io/piece_codec.cpp
+    io/board_parser.cpp
+    io/board_printer.cpp
+    texttests/script_parser.cpp
+    texttests/script_runner.cpp
+)
+target_include_directories(kfc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Composition root: reads a VPL script on stdin and prints board output.
+add_executable(kungfu_chess main.cpp)
+target_link_libraries(kungfu_chess PRIVATE kfc)
+
+# Unit tests. Each tests/unit/test_<module>.cpp is registered here.
 add_executable(unit_tests
     tests/test_main.cpp
     tests/unit/test_position.cpp
@@ -24,18 +47,10 @@ add_executable(unit_tests
     tests/unit/test_game_engine.cpp
     tests/unit/test_board_mapper.cpp
     tests/unit/test_controller.cpp
-    model/position.cpp
-    model/piece.cpp
-    model/board.cpp
-    rules/piece_rules.cpp
-    rules/rule_engine.cpp
-    realtime/motion.cpp
-    realtime/real_time_arbiter.cpp
-    engine/game_engine.cpp
-    input/board_mapper.cpp
-    input/controller.cpp
+    tests/unit/test_board_parser.cpp
+    tests/unit/test_board_printer.cpp
+    tests/unit/test_script_parser.cpp
 )
-target_include_directories(unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(unit_tests PRIVATE doctest)
+target_link_libraries(unit_tests PRIVATE doctest kfc)
 
 add_test(NAME unit_tests COMMAND unit_tests)
