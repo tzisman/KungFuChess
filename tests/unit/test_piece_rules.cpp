@@ -124,64 +124,64 @@ TEST_CASE("pawn advances one step forward into an empty cell") {
     Piece pawn = pieceAt(Color::kWhite, PieceKind::kPawn, Position{3, 4});
     Destinations moves = legalFor(board, pawn);
 
-    CHECK(reaches(moves, Position{4, 4}));
-    CHECK_FALSE(reaches(moves, Position{5, 4}));
-    CHECK_FALSE(reaches(moves, Position{2, 4}));
+    CHECK(reaches(moves, Position{2, 4}));
+    CHECK_FALSE(reaches(moves, Position{1, 4}));
+    CHECK_FALSE(reaches(moves, Position{4, 4}));
 }
 
 TEST_CASE("pawn takes a double step only from its starting row") {
     Board board{8, 8};
-    Piece pawn = pieceAt(Color::kWhite, PieceKind::kPawn, Position{1, 4});
+    Piece pawn = pieceAt(Color::kWhite, PieceKind::kPawn, Position{6, 4});
     Destinations moves = legalFor(board, pawn);
 
-    CHECK(reaches(moves, Position{2, 4}));
-    CHECK(reaches(moves, Position{3, 4}));
+    CHECK(reaches(moves, Position{5, 4}));
+    CHECK(reaches(moves, Position{4, 4}));
 }
 
 TEST_CASE("pawn cannot advance forward onto an occupied cell") {
     Board board{8, 8};
-    place(board, Color::kWhite, PieceKind::kPawn, Position{1, 4}, 1);
-    place(board, Color::kBlack, PieceKind::kPawn, Position{2, 4}, 2);
-    Piece pawn = *board.pieceAt(Position{1, 4});
+    place(board, Color::kWhite, PieceKind::kPawn, Position{6, 4}, 1);
+    place(board, Color::kBlack, PieceKind::kPawn, Position{5, 4}, 2);
+    Piece pawn = *board.pieceAt(Position{6, 4});
     Destinations moves = legalFor(board, pawn);
 
-    CHECK_FALSE(reaches(moves, Position{2, 4}));
-    CHECK_FALSE(reaches(moves, Position{3, 4}));
+    CHECK_FALSE(reaches(moves, Position{5, 4}));
+    CHECK_FALSE(reaches(moves, Position{4, 4}));
 }
 
 TEST_CASE("pawn captures one diagonal step forward") {
     Board board{8, 8};
     place(board, Color::kWhite, PieceKind::kPawn, Position{3, 4}, 1);
-    place(board, Color::kBlack, PieceKind::kPawn, Position{4, 5}, 2);
-    place(board, Color::kWhite, PieceKind::kPawn, Position{4, 3}, 3);
+    place(board, Color::kBlack, PieceKind::kPawn, Position{2, 5}, 2);
+    place(board, Color::kWhite, PieceKind::kPawn, Position{2, 3}, 3);
     Piece pawn = *board.pieceAt(Position{3, 4});
     Destinations moves = legalFor(board, pawn);
 
-    CHECK(reaches(moves, Position{4, 5}));
-    CHECK_FALSE(reaches(moves, Position{4, 3}));
+    CHECK(reaches(moves, Position{2, 5}));
+    CHECK_FALSE(reaches(moves, Position{2, 3}));
 }
 
 TEST_CASE("black pawn moves and captures downward") {
     Board board{8, 8};
-    place(board, Color::kBlack, PieceKind::kPawn, Position{6, 4}, 1);
-    place(board, Color::kWhite, PieceKind::kPawn, Position{5, 5}, 2);
-    Piece pawn = *board.pieceAt(Position{6, 4});
+    place(board, Color::kBlack, PieceKind::kPawn, Position{1, 4}, 1);
+    place(board, Color::kWhite, PieceKind::kPawn, Position{2, 5}, 2);
+    Piece pawn = *board.pieceAt(Position{1, 4});
     Destinations moves = legalFor(board, pawn);
 
-    CHECK(reaches(moves, Position{5, 4}));
-    CHECK(reaches(moves, Position{4, 4}));
-    CHECK(reaches(moves, Position{5, 5}));
+    CHECK(reaches(moves, Position{2, 4}));
+    CHECK(reaches(moves, Position{3, 4}));
+    CHECK(reaches(moves, Position{2, 5}));
 }
 
 TEST_CASE("a white pawn on the last row promotes to a queen") {
     Board board{8, 8};
-    Piece pawn = pieceAt(Color::kWhite, PieceKind::kPawn, Position{7, 4});
+    Piece pawn = pieceAt(Color::kWhite, PieceKind::kPawn, Position{0, 4});
     CHECK(promotedKind(board, pawn) == PieceKind::kQueen);
 }
 
 TEST_CASE("a black pawn on the last row promotes to a queen") {
     Board board{8, 8};
-    Piece pawn = pieceAt(Color::kBlack, PieceKind::kPawn, Position{0, 4});
+    Piece pawn = pieceAt(Color::kBlack, PieceKind::kPawn, Position{7, 4});
     CHECK(promotedKind(board, pawn) == PieceKind::kQueen);
 }
 

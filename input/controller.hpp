@@ -19,6 +19,7 @@ public:
 private:
     void handleFirstClick(std::optional<model::Position> cell);
     void handleSecondClick(std::optional<model::Position> cell);
+    bool isOwnPiece(model::Position cell) const;
 
     engine::GameEngine& engine_;
     BoardMapper mapper_;

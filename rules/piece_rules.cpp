@@ -35,10 +35,10 @@ const std::vector<Offset> kKingOffsets = {
     {+1, +1}, {+1, -1}, {-1, +1}, {-1, -1},
 };
 
-const int kWhiteForward = +1;
-const int kBlackForward = -1;
-const int kWhiteStartRow = 1;
-const int kBlackStartOffset = 2;
+const int kWhiteForward = -1;
+const int kBlackForward = +1;
+const int kBlackStartRow = 1;
+const int kWhiteStartOffset = 2;
 const int kPawnDoubleStep = 2;
 const PieceKind kPromotionKind = PieceKind::kQueen;
 
@@ -95,8 +95,8 @@ int forwardOf(Color color) {
 }
 
 int startRowOf(Color color, int boardHeight) {
-    return color == Color::kWhite ? kWhiteStartRow
-                                  : boardHeight - kBlackStartOffset;
+    return color == Color::kWhite ? boardHeight - kWhiteStartOffset
+                                  : kBlackStartRow;
 }
 
 int promotionRow(Color color, int boardHeight) {

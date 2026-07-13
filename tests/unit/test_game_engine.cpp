@@ -116,13 +116,13 @@ TEST_CASE("moves are rejected once the game is over") {
 }
 
 TEST_CASE("a pawn reaching the last row is promoted to a queen") {
-    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kPawn, Position{6, 4}}})};
-    engine.requestMove(Position{6, 4}, Position{7, 4});
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kPawn, Position{1, 4}}})};
+    engine.requestMove(Position{1, 4}, Position{0, 4});
 
     engine.wait(kSquareTravelMs);
 
     GameSnapshot snapshot = engine.snapshot();
-    auto piece = snapshot.pieceAt(Position{7, 4});
+    auto piece = snapshot.pieceAt(Position{0, 4});
     REQUIRE(piece.has_value());
     CHECK(piece->kind() == PieceKind::kQueen);
 }

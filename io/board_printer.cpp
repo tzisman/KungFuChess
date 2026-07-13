@@ -4,6 +4,15 @@
 #include "model/position.hpp"
 
 namespace kfc::io {
+namespace {
+
+constexpr char kErrorPrefix[] = "ERROR ";
+
+}
+
+void printParseError(const ParseError& error, std::ostream& out) {
+    out << kErrorPrefix << error.code << '\n';
+}
 
 void printBoard(const engine::GameSnapshot& snapshot, std::ostream& out) {
     for (int row = 0; row < snapshot.height(); ++row) {
