@@ -115,6 +115,18 @@ TEST_CASE("moves are rejected once the game is over") {
     CHECK(result.reason == "game_over");
 }
 
+TEST_CASE("a pawn reaching the last row is promoted to a queen") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kPawn, Position{6, 4}}})};
+    engine.requestMove(Position{6, 4}, Position{7, 4});
+
+    engine.wait(kSquareTravelMs);
+
+    GameSnapshot snapshot = engine.snapshot();
+    auto piece = snapshot.pieceAt(Position{7, 4});
+    REQUIRE(piece.has_value());
+    CHECK(piece->kind() == PieceKind::kQueen);
+}
+
 TEST_CASE("the snapshot exposes the board dimensions") {
     GameEngine engine{Board{8, 8}};
 

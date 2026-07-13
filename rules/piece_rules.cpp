@@ -40,6 +40,7 @@ const int kBlackForward = -1;
 const int kWhiteStartRow = 1;
 const int kBlackStartOffset = 2;
 const int kPawnDoubleStep = 2;
+const PieceKind kPromotionKind = PieceKind::kQueen;
 
 Position shifted(Position cell, const Offset& offset) {
     return Position{cell.row + offset.dRow, cell.col + offset.dCol};
@@ -96,6 +97,10 @@ int forwardOf(Color color) {
 int startRowOf(Color color, int boardHeight) {
     return color == Color::kWhite ? kWhiteStartRow
                                   : boardHeight - kBlackStartOffset;
+}
+
+int promotionRow(Color color, int boardHeight) {
+    return forwardOf(color) > 0 ? boardHeight - 1 : 0;
 }
 
 void addPawnAdvance(const Board& board, const Piece& piece,
@@ -182,6 +187,16 @@ const PieceRule& ruleFor(PieceKind kind) {
         case PieceKind::kPawn:   return kPawn;
     }
     return kPawn;
+}
+
+std::optional<PieceKind> promotedKind(const Board& board, const Piece& piece) {
+    if (piece.kind() != PieceKind::kPawn) {
+        return std::nullopt;
+    }
+    if (piece.cell().row == promotionRow(piece.color(), board.height())) {
+        return kPromotionKind;
+    }
+    return std::nullopt;
 }
 
 }

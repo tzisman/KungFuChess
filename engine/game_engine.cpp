@@ -3,6 +3,8 @@
 #include <utility>
 #include <vector>
 
+#include "rules/piece_rules.hpp"
+
 namespace kfc::engine {
 
 GameSnapshot::GameSnapshot(const model::Board& board, bool over)
@@ -44,6 +46,9 @@ void GameEngine::wait(int ms) {
         if (report.kingCaptured) {
             state_.markOver();
             return;
+        }
+        if (auto promoted = rules::promotedKind(board_, board_.pieceAt(report.destination).value())) {
+            board_.setPieceKind(report.destination, *promoted);
         }
     }
 }

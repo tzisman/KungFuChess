@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <set>
 
 #include "model/board.hpp"
@@ -55,5 +56,8 @@ public:
 };
 
 const PieceRule& ruleFor(model::PieceKind kind);
+
+std::optional<model::PieceKind> promotedKind(const model::Board& board,
+                                             const model::Piece& piece);
 
 }

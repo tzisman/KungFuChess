@@ -39,7 +39,7 @@ ArrivalReport RealTimeArbiter::resolveArrival(const Motion& motion) {
     bool kingCaptured =
         captured && captured->kind() == model::PieceKind::kKing;
 
-    return ArrivalReport{captured, kingCaptured};
+    return ArrivalReport{to, captured, kingCaptured};
 }
 
 }

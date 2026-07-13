@@ -51,6 +51,15 @@ void Board::movePiece(Position from, Position to) {
     cells_.emplace(to, moved);
 }
 
+void Board::setPieceKind(Position cell, PieceKind kind) {
+    requireInBounds(cell);
+    auto it = cells_.find(cell);
+    if (it == cells_.end()) {
+        throw CellEmptyError("setPieceKind: cell is empty");
+    }
+    it->second.setKind(kind);
+}
+
 void Board::requireInBounds(Position cell) const {
     if (!inBounds(cell)) {
         throw OutOfBoundsError("cell is out of bounds");

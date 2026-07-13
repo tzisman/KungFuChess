@@ -27,6 +27,7 @@ public:
 
     void setCell(Position cell) { cell_ = cell; }
     void setState(PieceState state) { state_ = state; }
+    void setKind(PieceKind kind) { kind_ = kind; }
 
 private:
     PieceId id_;

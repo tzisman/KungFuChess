@@ -94,3 +94,19 @@ TEST_CASE("removing from an empty cell is rejected") {
     Board board{8, 8};
     CHECK_THROWS_AS(board.removePiece(Position{2, 2}), CellEmptyError);
 }
+
+TEST_CASE("setting a piece kind changes only its kind") {
+    Board board{8, 8};
+    board.addPiece(pawnAt(Position{7, 0}, 4));
+    board.setPieceKind(Position{7, 0}, PieceKind::kQueen);
+    auto piece = board.pieceAt(Position{7, 0});
+    REQUIRE(piece.has_value());
+    CHECK(piece->kind() == PieceKind::kQueen);
+    CHECK(piece->id() == 4);
+    CHECK(piece->cell() == Position{7, 0});
+}
+
+TEST_CASE("setting a piece kind on an empty cell is rejected") {
+    Board board{8, 8};
+    CHECK_THROWS_AS(board.setPieceKind(Position{7, 0}, PieceKind::kQueen), CellEmptyError);
+}

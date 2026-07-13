@@ -11,6 +11,7 @@ using kfc::model::Piece;
 using kfc::model::PieceKind;
 using kfc::model::Position;
 using kfc::rules::Destinations;
+using kfc::rules::promotedKind;
 using kfc::rules::ruleFor;
 
 namespace {
@@ -170,4 +171,28 @@ TEST_CASE("black pawn moves and captures downward") {
     CHECK(reaches(moves, Position{5, 4}));
     CHECK(reaches(moves, Position{4, 4}));
     CHECK(reaches(moves, Position{5, 5}));
+}
+
+TEST_CASE("a white pawn on the last row promotes to a queen") {
+    Board board{8, 8};
+    Piece pawn = pieceAt(Color::kWhite, PieceKind::kPawn, Position{7, 4});
+    CHECK(promotedKind(board, pawn) == PieceKind::kQueen);
+}
+
+TEST_CASE("a black pawn on the last row promotes to a queen") {
+    Board board{8, 8};
+    Piece pawn = pieceAt(Color::kBlack, PieceKind::kPawn, Position{0, 4});
+    CHECK(promotedKind(board, pawn) == PieceKind::kQueen);
+}
+
+TEST_CASE("a pawn short of the last row does not promote") {
+    Board board{8, 8};
+    Piece pawn = pieceAt(Color::kWhite, PieceKind::kPawn, Position{6, 4});
+    CHECK_FALSE(promotedKind(board, pawn).has_value());
+}
+
+TEST_CASE("a non-pawn on the last row does not promote") {
+    Board board{8, 8};
+    Piece rook = pieceAt(Color::kWhite, PieceKind::kRook, Position{7, 4});
+    CHECK_FALSE(promotedKind(board, rook).has_value());
 }

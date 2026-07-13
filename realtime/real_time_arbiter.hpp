@@ -12,6 +12,7 @@ namespace kfc::realtime {
 
 
 struct ArrivalReport {
+    model::Position destination;
     std::optional<model::Piece> captured;
     bool kingCaptured = false;
 };
