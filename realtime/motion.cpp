@@ -25,4 +25,10 @@ void Motion::advance(int deltaMs) {
     elapsedMs_ += deltaMs;
 }
 
+Jump::Jump(model::Position cell) : cell_(cell) {}
+
+void Jump::advance(int deltaMs) {
+    elapsedMs_ += deltaMs;
+}
+
 }

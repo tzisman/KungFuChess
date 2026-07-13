@@ -40,12 +40,32 @@ MoveResult GameEngine::requestMove(model::Position from, model::Position to) {
     return {true, rules::reasonCode(rules::Reason::kOk)};
 }
 
+MoveResult GameEngine::requestJump(model::Position cell) {
+    if (state_.isOver()) {
+        return {false, kReasonGameOver};
+    }
+
+    std::optional<model::Piece> piece = state_.board().pieceAt(cell);
+    if (!piece) {
+        return {false, kReasonNoPiece};
+    }
+    if (piece->state() != model::PieceState::kIdle) {
+        return {false, kReasonNotIdle};
+    }
+
+    arbiter_.startJump(cell);
+    return {true, rules::reasonCode(rules::Reason::kOk)};
+}
+
 void GameEngine::wait(int ms) {
     std::vector<realtime::ArrivalReport> reports = arbiter_.advance(ms);
     for (const realtime::ArrivalReport& report : reports) {
         if (report.kingCaptured) {
             state_.markOver();
             return;
+        }
+        if (!report.landed) {
+            continue;
         }
         if (auto promoted = rules::promotedKind(state_.board(), state_.board().pieceAt(report.destination).value())) {
             state_.board().setPieceKind(report.destination, *promoted);

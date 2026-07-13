@@ -33,6 +33,7 @@ std::ostream& operator<<(std::ostream& os, PieceState state) {
         case PieceState::kIdle:     return os << "Idle";
         case PieceState::kMoving:   return os << "Moving";
         case PieceState::kCaptured: return os << "Captured";
+        case PieceState::kAirborne: return os << "Airborne";
     }
     return os << "?";
 }

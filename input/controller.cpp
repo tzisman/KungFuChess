@@ -14,6 +14,11 @@ void Controller::handleClick(int x, int y) {
     }
 }
 
+void Controller::handleJump(int x, int y) {
+    std::optional<model::Position> cell = mapper_.toCell(x, y);
+    if (cell) engine_.requestJump(*cell);
+}
+
 const std::optional<model::Position>& Controller::selection() const {
     return selected_;
 }

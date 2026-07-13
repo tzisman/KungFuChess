@@ -22,6 +22,7 @@ public:
     void removePiece(Position cell);
     void movePiece(Position from, Position to);
     void setPieceKind(Position cell, PieceKind kind);
+    void setPieceState(Position cell, PieceState state);
 
 private:
     void requireInBounds(Position cell) const;

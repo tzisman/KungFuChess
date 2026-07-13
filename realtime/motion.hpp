@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+
+#include "model/piece.hpp"
 #include "model/position.hpp"
 
 namespace kfc::realtime {
@@ -7,6 +10,7 @@ namespace kfc::realtime {
 constexpr int kCellSizePx = 100;
 constexpr int kPieceSpeedPxPerSec = 100;
 constexpr int kSquareTravelMs = kCellSizePx * 1000 / kPieceSpeedPxPerSec;
+constexpr int kJumpDurationMs = 1000;
 
 int travelDurationMs(model::Position from, model::Position to);
 
@@ -28,6 +32,26 @@ private:
     model::Position to_;
     int durationMs_;
     int elapsedMs_ = 0;
+};
+
+
+class Jump {
+public:
+    explicit Jump(model::Position cell);
+
+    model::Position cell() const { return cell_; }
+
+    void advance(int deltaMs);
+    bool hasLanded() const { return elapsedMs_ >= kJumpDurationMs; }
+
+    bool isLifted() const { return lifted_.has_value(); }
+    void lift(const model::Piece& piece) { lifted_ = piece; }
+    const model::Piece& lifted() const { return *lifted_; }
+
+private:
+    model::Position cell_;
+    int elapsedMs_ = 0;
+    std::optional<model::Piece> lifted_;
 };
 
 }

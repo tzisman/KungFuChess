@@ -9,6 +9,7 @@ namespace kfc::texttests {
 namespace {
 
 constexpr char kClick[] = "click";
+constexpr char kJump[] = "jump";
 constexpr char kWait[] = "wait";
 constexpr char kPrint[] = "print";
 constexpr char kBoard[] = "board";
@@ -22,6 +23,8 @@ std::optional<Command> parseCommand(const std::string& line) {
     try {
         if (tokens[0] == kClick && tokens.size() == 3)
             return ClickCommand{std::stoi(tokens[1]), std::stoi(tokens[2])};
+        if (tokens[0] == kJump && tokens.size() == 3)
+            return JumpCommand{std::stoi(tokens[1]), std::stoi(tokens[2])};
         if (tokens[0] == kWait && tokens.size() == 2)
             return WaitCommand{std::stoi(tokens[1])};
         if (tokens[0] == kPrint && tokens.size() == 2 && tokens[1] == kBoard)

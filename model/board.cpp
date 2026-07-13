@@ -60,6 +60,15 @@ void Board::setPieceKind(Position cell, PieceKind kind) {
     it->second.setKind(kind);
 }
 
+void Board::setPieceState(Position cell, PieceState state) {
+    requireInBounds(cell);
+    auto it = cells_.find(cell);
+    if (it == cells_.end()) {
+        throw CellEmptyError("setPieceState: cell is empty");
+    }
+    it->second.setState(state);
+}
+
 void Board::requireInBounds(Position cell) const {
     if (!inBounds(cell)) {
         throw OutOfBoundsError("cell is out of bounds");

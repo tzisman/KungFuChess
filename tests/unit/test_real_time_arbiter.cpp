@@ -122,3 +122,65 @@ TEST_CASE("advancing with no active motion reports nothing") {
 
     CHECK(reports.empty());
 }
+
+TEST_CASE("an airborne piece lands as idle after the jump window") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    RealTimeArbiter arbiter{board};
+
+    CHECK(arbiter.startJump(Position{4, 4}));
+    CHECK(board.pieceAt(Position{4, 4})->state() ==
+          kfc::model::PieceState::kAirborne);
+
+    arbiter.advance(kfc::realtime::kJumpDurationMs);
+
+    CHECK(board.pieceAt(Position{4, 4})->state() ==
+          kfc::model::PieceState::kIdle);
+}
+
+TEST_CASE("an enemy arriving mid-jump sits on the cell, airborne piece lifted") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    place(board, Color::kBlack, PieceKind::kPawn, Position{4, 5}, 2);
+    RealTimeArbiter arbiter{board};
+    arbiter.startMotion(Position{4, 5}, Position{4, 4});
+    arbiter.advance(kSquareTravelMs / 2);  // enemy halfway, no jump yet
+
+    arbiter.startJump(Position{4, 4});
+    arbiter.advance(kSquareTravelMs / 2);  // enemy arrives; jump still airborne
+
+    CHECK(board.pieceAt(Position{4, 4})->color() == Color::kBlack);
+    CHECK(board.pieceAt(Position{4, 4})->kind() == PieceKind::kPawn);
+}
+
+TEST_CASE("the airborne piece captures the arrived enemy when it lands") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    place(board, Color::kBlack, PieceKind::kPawn, Position{4, 5}, 2);
+    RealTimeArbiter arbiter{board};
+    arbiter.startJump(Position{4, 4});
+    arbiter.startMotion(Position{4, 5}, Position{4, 4});
+
+    std::vector<ArrivalReport> reports = arbiter.advance(kfc::realtime::kJumpDurationMs);
+
+    const ArrivalReport& landing = reports.back();
+    CHECK_FALSE(landing.landed);
+    REQUIRE(landing.captured.has_value());
+    CHECK(landing.captured->kind() == PieceKind::kPawn);
+    CHECK(board.pieceAt(Position{4, 4})->color() == Color::kWhite);
+    CHECK(board.pieceAt(Position{4, 4})->kind() == PieceKind::kRook);
+}
+
+TEST_CASE("capturing an arrived king on landing is reported") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    place(board, Color::kBlack, PieceKind::kKing, Position{4, 5}, 2);
+    RealTimeArbiter arbiter{board};
+    arbiter.startJump(Position{4, 4});
+    arbiter.startMotion(Position{4, 5}, Position{4, 4});
+
+    std::vector<ArrivalReport> reports = arbiter.advance(kfc::realtime::kJumpDurationMs);
+
+    CHECK(reports.back().kingCaptured);
+    CHECK_FALSE(reports.back().landed);
+}

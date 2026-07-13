@@ -127,6 +127,58 @@ TEST_CASE("a pawn reaching the last row is promoted to a queen") {
     CHECK(piece->kind() == PieceKind::kQueen);
 }
 
+TEST_CASE("a jump on an idle piece is accepted") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+
+    MoveResult result = engine.requestJump(Position{4, 4});
+
+    CHECK(result.isAccepted);
+    CHECK(result.reason == "ok");
+}
+
+TEST_CASE("a jump on an empty cell is rejected") {
+    GameEngine engine{Board{8, 8}};
+
+    MoveResult result = engine.requestJump(Position{4, 4});
+
+    CHECK_FALSE(result.isAccepted);
+    CHECK(result.reason == "no_piece");
+}
+
+TEST_CASE("a moving piece cannot jump") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    engine.requestMove(Position{4, 4}, Position{4, 7});
+
+    MoveResult result = engine.requestJump(Position{4, 4});
+
+    CHECK_FALSE(result.isAccepted);
+    CHECK(result.reason == "not_idle");
+}
+
+TEST_CASE("an airborne piece cannot jump again") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    engine.requestJump(Position{4, 4});
+
+    MoveResult result = engine.requestJump(Position{4, 4});
+
+    CHECK_FALSE(result.isAccepted);
+    CHECK(result.reason == "not_idle");
+}
+
+TEST_CASE("an airborne piece capturing an arriving king ends the game") {
+    GameEngine engine{boardWith({
+        Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}},
+        Piece{2, Color::kBlack, PieceKind::kKing, Position{4, 5}},
+    })};
+    engine.requestJump(Position{4, 4});
+    engine.requestMove(Position{4, 5}, Position{4, 4});
+
+    engine.wait(kSquareTravelMs);
+
+    CHECK(engine.isOver());
+    CHECK(engine.snapshot().pieceAt(Position{4, 4})->kind() == PieceKind::kRook);
+}
+
 TEST_CASE("the snapshot exposes the board dimensions") {
     GameEngine engine{Board{8, 8}};
 
