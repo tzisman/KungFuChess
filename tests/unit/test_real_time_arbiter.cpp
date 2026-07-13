@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <vector>
+
 #include "model/board.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"
@@ -39,9 +41,9 @@ TEST_CASE("the board does not change before the piece arrives") {
 
     CHECK(arbiter.startMotion(Position{4, 4}, Position{4, 7}));
 
-    ArrivalReport report = arbiter.advance(kSquareTravelMs);  // 1000 of 3000ms
+    std::vector<ArrivalReport> reports = arbiter.advance(kSquareTravelMs);  // 1000 of 3000ms
 
-    CHECK_FALSE(report.pieceArrived);
+    CHECK(reports.empty());
     CHECK(arbiter.hasActiveMotion());
     CHECK(board.pieceAt(Position{4, 4}).has_value());
     CHECK_FALSE(board.pieceAt(Position{4, 7}).has_value());
@@ -53,10 +55,10 @@ TEST_CASE("the board updates when the piece arrives") {
     RealTimeArbiter arbiter{board};
     arbiter.startMotion(Position{4, 4}, Position{4, 7});
 
-    ArrivalReport report = arbiter.advance(3 * kSquareTravelMs);
+    std::vector<ArrivalReport> reports = arbiter.advance(3 * kSquareTravelMs);
 
-    CHECK(report.pieceArrived);
-    CHECK_FALSE(report.captured.has_value());
+    REQUIRE(reports.size() == 1);
+    CHECK_FALSE(reports[0].captured.has_value());
     CHECK_FALSE(arbiter.hasActiveMotion());
     CHECK_FALSE(board.pieceAt(Position{4, 4}).has_value());
     CHECK(board.pieceAt(Position{4, 7}).has_value());
@@ -69,12 +71,12 @@ TEST_CASE("arrival onto an enemy piece captures it") {
     RealTimeArbiter arbiter{board};
     arbiter.startMotion(Position{4, 4}, Position{4, 6});
 
-    ArrivalReport report = arbiter.advance(2 * kSquareTravelMs);
+    std::vector<ArrivalReport> reports = arbiter.advance(2 * kSquareTravelMs);
 
-    CHECK(report.pieceArrived);
-    REQUIRE(report.captured.has_value());
-    CHECK(report.captured->kind() == PieceKind::kPawn);
-    CHECK_FALSE(report.kingCaptured);
+    REQUIRE(reports.size() == 1);
+    REQUIRE(reports[0].captured.has_value());
+    CHECK(reports[0].captured->kind() == PieceKind::kPawn);
+    CHECK_FALSE(reports[0].kingCaptured);
     CHECK(board.pieceAt(Position{4, 6})->color() == Color::kWhite);
 }
 
@@ -85,9 +87,10 @@ TEST_CASE("capturing the king is reported") {
     RealTimeArbiter arbiter{board};
     arbiter.startMotion(Position{4, 4}, Position{4, 6});
 
-    ArrivalReport report = arbiter.advance(2 * kSquareTravelMs);
+    std::vector<ArrivalReport> reports = arbiter.advance(2 * kSquareTravelMs);
 
-    CHECK(report.kingCaptured);
+    REQUIRE(reports.size() == 1);
+    CHECK(reports[0].kingCaptured);
 }
 
 TEST_CASE("only one motion may be active at a time") {
@@ -115,7 +118,7 @@ TEST_CASE("advancing with no active motion reports nothing") {
     Board board{8, 8};
     RealTimeArbiter arbiter{board};
 
-    ArrivalReport report = arbiter.advance(kSquareTravelMs);
+    std::vector<ArrivalReport> reports = arbiter.advance(kSquareTravelMs);
 
-    CHECK_FALSE(report.pieceArrived);
+    CHECK(reports.empty());
 }

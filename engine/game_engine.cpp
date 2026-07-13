@@ -1,6 +1,7 @@
 #include "engine/game_engine.hpp"
 
 #include <utility>
+#include <vector>
 
 namespace kfc::engine {
 
@@ -38,9 +39,12 @@ MoveResult GameEngine::requestMove(model::Position from, model::Position to) {
 }
 
 void GameEngine::wait(int ms) {
-    realtime::ArrivalReport report = arbiter_.advance(ms);
-    if (report.kingCaptured) {
-        state_.markOver();
+    std::vector<realtime::ArrivalReport> reports = arbiter_.advance(ms);
+    for (const realtime::ArrivalReport& report : reports) {
+        if (report.kingCaptured) {
+            state_.markOver();
+            return;
+        }
     }
 }
 

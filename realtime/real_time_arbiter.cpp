@@ -8,24 +8,27 @@ bool RealTimeArbiter::startMotion(model::Position from, model::Position to) {
     if (hasActiveMotion()) {
         return false;
     }
-    active_.emplace(from, to);
+    active_.emplace_back(from, to);
     return true;
 }
 
-ArrivalReport RealTimeArbiter::advance(int deltaMs) {
-    if (!active_) {
-        return {};
+std::vector<ArrivalReport> RealTimeArbiter::advance(int deltaMs) {
+    std::vector<ArrivalReport> reports;
+    for (auto it = active_.begin(); it != active_.end();) {
+        it->advance(deltaMs);
+        if (it->hasArrived()) {
+            reports.push_back(resolveArrival(*it));
+            it = active_.erase(it);
+        } else {
+            ++it;
+        }
     }
-    active_->advance(deltaMs);
-    if (!active_->hasArrived()) {
-        return {};
-    }
-    return resolveArrival();
+    return reports;
 }
 
-ArrivalReport RealTimeArbiter::resolveArrival() {
-    model::Position from = active_->from();
-    model::Position to = active_->to();
+ArrivalReport RealTimeArbiter::resolveArrival(const Motion& motion) {
+    model::Position from = motion.from();
+    model::Position to = motion.to();
 
     std::optional<model::Piece> captured = board_.pieceAt(to);
     if (captured) {
@@ -36,8 +39,7 @@ ArrivalReport RealTimeArbiter::resolveArrival() {
     bool kingCaptured =
         captured && captured->kind() == model::PieceKind::kKing;
 
-    active_.reset();
-    return ArrivalReport{true, captured, kingCaptured};
+    return ArrivalReport{captured, kingCaptured};
 }
 
 }
