@@ -72,7 +72,7 @@ model::Board buildBoard(const std::vector<std::string>& rows) {
     return board;
 }
 
-}  // namespace
+}  
 
 ParsedInput parseInput(std::istream& in) {
     skipToBoardSection(in);

@@ -23,6 +23,7 @@ add_library(kfc
     engine/game_engine.cpp
     input/board_mapper.cpp
     input/controller.cpp
+    view/game_snapshot.cpp
     io/piece_codec.cpp
     io/board_parser.cpp
     io/board_printer.cpp
@@ -47,6 +48,7 @@ add_executable(unit_tests
     tests/unit/test_game_engine.cpp
     tests/unit/test_board_mapper.cpp
     tests/unit/test_controller.cpp
+    tests/unit/test_game_snapshot.cpp
     tests/unit/test_board_parser.cpp
     tests/unit/test_board_printer.cpp
     tests/unit/test_script_parser.cpp
