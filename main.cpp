@@ -10,6 +10,8 @@
 #include "texttests/script_parser.hpp"
 #include "texttests/script_runner.hpp"
 
+//https://github.com/tzisman/KungFuChess
+
 int main() {
     kfc::io::ParsedInput parsed = kfc::io::parseInput(std::cin);
 
