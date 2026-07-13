@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The project is currently undergoing a **major refactoring of the entire folder/directory structure**, restructuring the codebase around explicit **design patterns** and the strict layer separation described below. Expect files and directories to be reorganized; when adding or moving code, follow the intended architecture and design-pattern conventions rather than the previous layout. The sections below describe the **intended** architecture and rules the implementation must follow.
 
-The target layout (see **Project Structure** below) has been scaffolded under `kungfu_chess/` and `tests/`. During migration it coexists with the legacy `App/` and `Business Logic/` directories; new work goes into the new layout, and the legacy directories are deleted only once everything has been migrated across.
+The target layout (see **Project Structure** below) is now the sole layout: all code lives in the per-layer modules at the repository root, mirrored by `tests/`. The legacy `App/` and `Business Logic/` directories have been fully migrated and removed.
 
 ## Game Overview
 
