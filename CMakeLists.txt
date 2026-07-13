@@ -21,6 +21,7 @@ add_executable(unit_tests
     tests/unit/test_piece_rules.cpp
     tests/unit/test_rule_engine.cpp
     tests/unit/test_real_time_arbiter.cpp
+    tests/unit/test_game_engine.cpp
     model/position.cpp
     model/piece.cpp
     model/board.cpp
@@ -28,6 +29,7 @@ add_executable(unit_tests
     rules/rule_engine.cpp
     realtime/motion.cpp
     realtime/real_time_arbiter.cpp
+    engine/game_engine.cpp
 )
 target_include_directories(unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(unit_tests PRIVATE doctest)
