@@ -123,7 +123,7 @@ TEST_CASE("advancing with no active motion reports nothing") {
     CHECK(reports.empty());
 }
 
-TEST_CASE("an airborne piece lands as idle after the jump window") {
+TEST_CASE("an airborne piece rests after the jump window, then goes idle") {
     Board board{8, 8};
     place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
     RealTimeArbiter arbiter{board};
@@ -133,9 +133,44 @@ TEST_CASE("an airborne piece lands as idle after the jump window") {
           kfc::model::PieceState::kAirborne);
 
     arbiter.advance(kfc::realtime::kJumpDurationMs);
+    CHECK(board.pieceAt(Position{4, 4})->state() ==
+          kfc::model::PieceState::kResting);
 
+    arbiter.advance(kfc::realtime::kCooldownMs);
     CHECK(board.pieceAt(Position{4, 4})->state() ==
           kfc::model::PieceState::kIdle);
+}
+
+TEST_CASE("an arrived piece rests during its cooldown, then goes idle") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    RealTimeArbiter arbiter{board};
+    arbiter.startMotion(Position{4, 4}, Position{4, 7});
+
+    arbiter.advance(3 * kSquareTravelMs);
+    CHECK(board.pieceAt(Position{4, 7})->state() ==
+          kfc::model::PieceState::kResting);
+
+    arbiter.advance(kfc::realtime::kCooldownMs);
+    CHECK(board.pieceAt(Position{4, 7})->state() ==
+          kfc::model::PieceState::kIdle);
+}
+
+TEST_CASE("capturing a resting piece leaves the capturer resting") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    place(board, Color::kBlack, PieceKind::kRook, Position{0, 7}, 2);
+    RealTimeArbiter arbiter{board};
+
+    arbiter.startMotion(Position{4, 4}, Position{4, 7});
+    arbiter.advance(3 * kSquareTravelMs);  // white arrives at 4,7 and rests
+
+    arbiter.startMotion(Position{0, 7}, Position{4, 7});
+    arbiter.advance(4 * kSquareTravelMs);  // black captures the resting white
+
+    CHECK(board.pieceAt(Position{4, 7})->id() == 2);
+    CHECK(board.pieceAt(Position{4, 7})->state() ==
+          kfc::model::PieceState::kResting);
 }
 
 TEST_CASE("an enemy arriving mid-jump sits on the cell, airborne piece lifted") {

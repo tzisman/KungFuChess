@@ -24,6 +24,7 @@ bool RealTimeArbiter::startJump(model::Position cell) {
 
 std::vector<ArrivalReport> RealTimeArbiter::advance(int deltaMs) {
     std::vector<ArrivalReport> reports;
+    tickCooldowns(deltaMs);
     for (auto it = active_.begin(); it != active_.end();) {
         it->advance(deltaMs);
         if (it->hasArrived()) {
@@ -49,7 +50,7 @@ ArrivalReport RealTimeArbiter::resolveArrival(const Motion& motion) {
         jumpAt(to)->lift(*occupant);
         board_.removePiece(to);
         board_.movePiece(from, to);
-        board_.setPieceState(to, model::PieceState::kIdle);
+        startCooldown(board_.pieceAt(to)->id(), to);
         return ArrivalReport{to, std::nullopt, false, true};
     }
 
@@ -57,7 +58,7 @@ ArrivalReport RealTimeArbiter::resolveArrival(const Motion& motion) {
         board_.removePiece(to);
     }
     board_.movePiece(from, to);
-    board_.setPieceState(to, model::PieceState::kIdle);
+    startCooldown(board_.pieceAt(to)->id(), to);
 
     bool kingCaptured =
         occupant && occupant->kind() == model::PieceKind::kKing;
@@ -81,16 +82,39 @@ void RealTimeArbiter::landAirborne(int deltaMs,
 
             model::Piece lander = it->lifted();
             lander.setCell(cell);
-            lander.setState(model::PieceState::kIdle);
             board_.addPiece(lander);
+            startCooldown(lander.id(), cell);
 
             bool kingCaptured =
                 victim && victim->kind() == model::PieceKind::kKing;
             reports.push_back(ArrivalReport{cell, victim, kingCaptured, false});
         } else {
-            board_.setPieceState(cell, model::PieceState::kIdle);
+            startCooldown(board_.pieceAt(cell)->id(), cell);
         }
         it = airborne_.erase(it);
+    }
+}
+
+void RealTimeArbiter::startCooldown(model::PieceId pieceId,
+                                    model::Position cell) {
+    board_.setPieceState(cell, model::PieceState::kResting);
+    resting_.emplace_back(pieceId, cell);
+}
+
+void RealTimeArbiter::tickCooldowns(int deltaMs) {
+    for (auto it = resting_.begin(); it != resting_.end();) {
+        it->advance(deltaMs);
+        if (!it->hasElapsed()) {
+            ++it;
+            continue;
+        }
+
+        std::optional<model::Piece> piece = board_.pieceAt(it->cell());
+        if (piece && piece->id() == it->pieceId() &&
+            piece->state() == model::PieceState::kResting) {
+            board_.setPieceState(it->cell(), model::PieceState::kIdle);
+        }
+        it = resting_.erase(it);
     }
 }
 

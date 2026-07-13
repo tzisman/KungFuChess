@@ -12,7 +12,7 @@ enum class Color { kWhite, kBlack };
 enum class PieceKind { kKing, kQueen, kRook, kBishop, kKnight, kPawn };
 
 
-enum class PieceState { kIdle, kMoving, kCaptured, kAirborne };
+enum class PieceState { kIdle, kMoving, kCaptured, kAirborne, kResting };
 
 class Piece {
 public:

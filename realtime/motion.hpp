@@ -11,6 +11,7 @@ constexpr int kCellSizePx = 100;
 constexpr int kPieceSpeedPxPerSec = 100;
 constexpr int kSquareTravelMs = kCellSizePx * 1000 / kPieceSpeedPxPerSec;
 constexpr int kJumpDurationMs = 1000;
+constexpr int kCooldownMs = 1000;
 
 int travelDurationMs(model::Position from, model::Position to);
 
@@ -52,6 +53,23 @@ private:
     model::Position cell_;
     int elapsedMs_ = 0;
     std::optional<model::Piece> lifted_;
+};
+
+
+class Cooldown {
+public:
+    Cooldown(model::PieceId pieceId, model::Position cell);
+
+    model::PieceId pieceId() const { return pieceId_; }
+    model::Position cell() const { return cell_; }
+
+    void advance(int deltaMs);
+    bool hasElapsed() const { return elapsedMs_ >= kCooldownMs; }
+
+private:
+    model::PieceId pieceId_;
+    model::Position cell_;
+    int elapsedMs_ = 0;
 };
 
 }

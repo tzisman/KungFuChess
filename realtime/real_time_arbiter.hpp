@@ -31,12 +31,15 @@ public:
 private:
     ArrivalReport resolveArrival(const Motion& motion);
     void landAirborne(int deltaMs, std::vector<ArrivalReport>& reports);
+    void startCooldown(model::PieceId pieceId, model::Position cell);
+    void tickCooldowns(int deltaMs);
     bool isAirborneAt(model::Position cell) const;
     Jump* jumpAt(model::Position cell);
 
     model::Board& board_;
     std::vector<Motion> active_;
     std::vector<Jump> airborne_;
+    std::vector<Cooldown> resting_;
 };
 
 }

@@ -31,4 +31,11 @@ void Jump::advance(int deltaMs) {
     elapsedMs_ += deltaMs;
 }
 
+Cooldown::Cooldown(model::PieceId pieceId, model::Position cell)
+    : pieceId_(pieceId), cell_(cell) {}
+
+void Cooldown::advance(int deltaMs) {
+    elapsedMs_ += deltaMs;
+}
+
 }

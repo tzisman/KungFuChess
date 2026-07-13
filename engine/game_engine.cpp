@@ -36,6 +36,10 @@ MoveResult GameEngine::requestMove(model::Position from, model::Position to) {
         return {false, rules::reasonCode(validation.reason)};
     }
 
+    if (state_.board().pieceAt(from)->state() != model::PieceState::kIdle) {
+        return {false, kReasonNotIdle};
+    }
+
     arbiter_.startMotion(from, to);
     return {true, rules::reasonCode(rules::Reason::kOk)};
 }

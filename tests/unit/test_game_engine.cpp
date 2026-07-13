@@ -14,6 +14,7 @@ using kfc::model::Color;
 using kfc::model::Piece;
 using kfc::model::PieceKind;
 using kfc::model::Position;
+using kfc::realtime::kCooldownMs;
 using kfc::realtime::kSquareTravelMs;
 
 namespace {
@@ -68,11 +69,23 @@ TEST_CASE("a second move is rejected while a motion is in progress") {
     CHECK(result.reason == "motion_in_progress");
 }
 
-TEST_CASE("a new move is allowed once the previous motion arrives") {
+TEST_CASE("a piece that just arrived is resting and cannot move yet") {
     GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
     engine.requestMove(Position{4, 4}, Position{4, 7});
 
     engine.wait(3 * kSquareTravelMs);
+
+    MoveResult result = engine.requestMove(Position{4, 7}, Position{4, 4});
+    CHECK_FALSE(result.isAccepted);
+    CHECK(result.reason == "not_idle");
+}
+
+TEST_CASE("a new move is allowed once the cooldown after arrival elapses") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    engine.requestMove(Position{4, 4}, Position{4, 7});
+
+    engine.wait(3 * kSquareTravelMs);
+    engine.wait(kCooldownMs);
 
     CHECK(engine.requestMove(Position{4, 7}, Position{4, 4}).isAccepted);
 }
