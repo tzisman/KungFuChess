@@ -7,9 +7,7 @@
 
 namespace kfc::realtime {
 
-constexpr int kCellSizePx = 100;
-constexpr int kPieceSpeedPxPerSec = 100;
-constexpr int kSquareTravelMs = kCellSizePx * 1000 / kPieceSpeedPxPerSec;
+constexpr int kSquareTravelMs = 1000;
 constexpr int kJumpDurationMs = 1000;
 constexpr int kCooldownMs = 1000;
 

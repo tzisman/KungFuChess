@@ -11,6 +11,18 @@ enable_testing()
 add_library(doctest INTERFACE)
 target_include_directories(doctest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 
+# GUI image backend. OpenCV is confined to this target: the pure logic library
+# (kfc), the text pipeline, and the tests stay completely free of any display
+# dependency, preserving the Business Logic / GUI layer separation.
+find_package(OpenCV REQUIRED)
+
+add_library(kfc_img images/img.cpp)
+target_include_directories(kfc_img PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/images
+    ${OpenCV_INCLUDE_DIRS}
+)
+target_link_libraries(kfc_img PUBLIC ${OpenCV_LIBS})
+
 # All production sources across the layers, shared by the app and the tests.
 add_library(kfc
     model/position.cpp
