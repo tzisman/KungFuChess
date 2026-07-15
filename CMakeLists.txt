@@ -48,6 +48,11 @@ target_include_directories(kfc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(kungfu_chess main.cpp)
 target_link_libraries(kungfu_chess PRIVATE kfc)
 
+# GUI demo: opens a window and displays the board image via the view layer.
+add_executable(view_demo view/view_demo.cpp view/image_view.cpp)
+target_include_directories(view_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(view_demo PRIVATE kfc_img)
+
 # Unit tests. Each tests/unit/test_<module>.cpp is registered here.
 add_executable(unit_tests
     tests/test_main.cpp
