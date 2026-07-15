@@ -12,6 +12,24 @@ namespace {
 const cv::Scalar kSelectionColour{0, 215, 255, 255};
 constexpr int kSelectionThickness = 3;
 
+const cv::Scalar kRestBarColour{90, 200, 90, 255};
+const cv::Scalar kRestBarTrackColour{40, 40, 40, 255};
+constexpr int kRestBarHeight = 5;
+constexpr int kRestBarInset = 4;
+
+constexpr char kGameOverText[] = "GAME OVER";
+constexpr double kGameOverWidthFraction = 0.8;
+const cv::Scalar kGameOverColour{255, 255, 255, 255};
+const cv::Scalar kGameOverOutlineColour{0, 0, 0, 255};
+constexpr int kGameOverThickness = 4;
+constexpr int kGameOverOutlineThickness = 12;
+constexpr int kTextFont = cv::FONT_HERSHEY_SIMPLEX;
+
+bool isResting(model::PieceState state) {
+    return state == model::PieceState::kShortResting ||
+           state == model::PieceState::kLongResting;
+}
+
 }  // namespace
 
 Renderer::Renderer(const std::string& boardImagePath,
@@ -25,8 +43,10 @@ Img Renderer::render(const GameSnapshot& snapshot, int nowMs) const {
     Img canvas = background_.clone();
     for (const PieceView& piece : snapshot.pieces) {
         drawPiece(canvas, piece, nowMs);
+        if (isResting(piece.state)) drawRestBar(canvas, piece);
     }
     if (snapshot.selectedCell) drawSelection(canvas, *snapshot.selectedCell);
+    if (snapshot.gameOver) drawGameOver(canvas);
     return canvas;
 }
 
@@ -88,6 +108,26 @@ int Renderer::frameIndex(const PieceView& piece, Animation animation,
     return std::min(frame, frameCount - 1);
 }
 
+// The bar drains as the rest runs out: the piece reports how far through it
+// is, and how long a rest lasts stays a matter for the rules alone.
+void Renderer::drawRestBar(Img& canvas, const PieceView& piece) const {
+    cv::Mat pixels = canvas.get_mat();
+    Pixel at = geometry_.topLeftOf(piece.cell);
+
+    int width = geometry_.cellWidth() - 2 * kRestBarInset;
+    int x = at.x + kRestBarInset;
+    int y = at.y + geometry_.cellHeight() - kRestBarInset - kRestBarHeight;
+
+    cv::rectangle(pixels, cv::Rect(x, y, width, kRestBarHeight),
+                  kRestBarTrackColour, cv::FILLED);
+
+    int left = static_cast<int>(width * (1.0 - piece.progress));
+    if (left > 0) {
+        cv::rectangle(pixels, cv::Rect(x, y, left, kRestBarHeight),
+                      kRestBarColour, cv::FILLED);
+    }
+}
+
 // Img can compose images but not draw shapes, so the outline is drawn straight
 // onto the pixels the canvas already owns. Copying the Mat header shares those
 // pixels rather than duplicating them.
@@ -98,6 +138,27 @@ void Renderer::drawSelection(Img& canvas, model::Position cell) const {
                   cv::Rect(at.x, at.y, geometry_.cellWidth(),
                            geometry_.cellHeight()),
                   kSelectionColour, kSelectionThickness);
+}
+
+// Scaled to span most of the board whatever size it is drawn at, and outlined
+// so it stays readable over both the light and the dark squares.
+void Renderer::drawGameOver(Img& canvas) const {
+    int baseline = 0;
+    cv::Size unscaled =
+        cv::getTextSize(kGameOverText, kTextFont, 1.0, kGameOverThickness,
+                        &baseline);
+    double scale = kGameOverWidthFraction * geometry_.imageWidth() /
+                   unscaled.width;
+
+    cv::Size text = cv::getTextSize(kGameOverText, kTextFont, scale,
+                                    kGameOverThickness, &baseline);
+    int x = (geometry_.imageWidth() - text.width) / 2;
+    int y = (geometry_.imageHeight() + text.height) / 2;
+
+    canvas.put_text(kGameOverText, x, y, scale, kGameOverOutlineColour,
+                    kGameOverOutlineThickness);
+    canvas.put_text(kGameOverText, x, y, scale, kGameOverColour,
+                    kGameOverThickness);
 }
 
 }
