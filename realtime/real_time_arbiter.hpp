@@ -29,7 +29,7 @@ public:
     std::vector<ArrivalReport> advance(int deltaMs);
 
 private:
-    ArrivalReport resolveArrival(const Motion& motion);
+    std::optional<ArrivalReport> resolveArrival(const Motion& motion);
     void landAirborne(int deltaMs, std::vector<ArrivalReport>& reports);
     void startCooldown(model::PieceId pieceId, model::Position cell);
     void tickCooldowns(int deltaMs);

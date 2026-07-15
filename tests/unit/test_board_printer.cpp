@@ -21,7 +21,7 @@ TEST_CASE("prints an empty board as dots") {
     GameEngine engine{Board{3, 2}};
     std::ostringstream out;
 
-    printBoard(engine.snapshot(), out);
+    printBoard(engine.board(), out);
 
     CHECK(out.str() == ". . .\n. . .\n");
 }
@@ -33,7 +33,7 @@ TEST_CASE("prints pieces as color-and-kind tokens") {
     GameEngine engine{std::move(board)};
     std::ostringstream out;
 
-    printBoard(engine.snapshot(), out);
+    printBoard(engine.board(), out);
 
     CHECK(out.str() == "wK . .\n. . .\n. . bQ\n");
 }

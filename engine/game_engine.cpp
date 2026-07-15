@@ -1,23 +1,13 @@
 #include "engine/game_engine.hpp"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
+#include "model/piece.hpp"
 #include "rules/piece_rules.hpp"
 
 namespace kfc::engine {
-
-GameSnapshot::GameSnapshot(const model::Board& board, bool over)
-    : board_(board), over_(over) {}
-
-int GameSnapshot::width() const { return board_.width(); }
-int GameSnapshot::height() const { return board_.height(); }
-
-std::optional<model::Piece> GameSnapshot::pieceAt(model::Position cell) const {
-    return board_.pieceAt(cell);
-}
-
-bool GameSnapshot::isOver() const { return over_; }
 
 GameEngine::GameEngine(model::Board board)
     : state_(std::move(board)), arbiter_(state_.board()) {}
@@ -77,9 +67,7 @@ void GameEngine::wait(int ms) {
     }
 }
 
-GameSnapshot GameEngine::snapshot() const {
-    return {state_.board(), state_.isOver()};
-}
+const model::Board& GameEngine::board() const { return state_.board(); }
 
 bool GameEngine::isOver() const { return state_.isOver(); }
 

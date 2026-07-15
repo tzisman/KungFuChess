@@ -1,11 +1,9 @@
 #pragma once
 
-#include <optional>
 #include <string>
 
 #include "model/board.hpp"
 #include "model/game_state.hpp"
-#include "model/piece.hpp"
 #include "model/position.hpp"
 #include "realtime/real_time_arbiter.hpp"
 #include "rules/rule_engine.hpp"
@@ -22,20 +20,6 @@ struct MoveResult {
     std::string reason;
 };
 
-class GameSnapshot {
-public:
-    GameSnapshot(const model::Board& board, bool over);
-
-    int width() const;
-    int height() const;
-    std::optional<model::Piece> pieceAt(model::Position cell) const;
-    bool isOver() const;
-
-private:
-    const model::Board& board_;
-    bool over_;
-};
-
 class GameEngine {
 public:
     explicit GameEngine(model::Board board);
@@ -47,7 +31,7 @@ public:
     MoveResult requestJump(model::Position cell);
     void wait(int ms);
 
-    GameSnapshot snapshot() const;
+    const model::Board& board() const;
     bool isOver() const;
 
 private:

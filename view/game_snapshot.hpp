@@ -3,7 +3,7 @@
 #include <optional>
 #include <vector>
 
-#include "engine/game_engine.hpp"
+#include "model/board.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"
 
@@ -24,7 +24,7 @@ struct GameSnapshot {
     bool gameOver;
 };
 
-GameSnapshot buildSnapshot(const engine::GameSnapshot& state,
+GameSnapshot buildSnapshot(const model::Board& board, bool gameOver,
                            const std::optional<model::Position>& selection);
 
 }

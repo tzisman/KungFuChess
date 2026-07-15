@@ -16,8 +16,9 @@ int travelDurationMs(model::Position from, model::Position to);
 
 class Motion {
 public:
-    Motion(model::Position from, model::Position to);
+    Motion(model::PieceId pieceId, model::Position from, model::Position to);
 
+    model::PieceId pieceId() const { return pieceId_; }
     model::Position from() const { return from_; }
     model::Position to() const { return to_; }
     int durationMs() const { return durationMs_; }
@@ -27,6 +28,7 @@ public:
     bool hasArrived() const { return elapsedMs_ >= durationMs_; }
 
 private:
+    model::PieceId pieceId_;
     model::Position from_;
     model::Position to_;
     int durationMs_;

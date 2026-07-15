@@ -21,7 +21,7 @@ using kfc::view::GameSnapshot;
 TEST_CASE("the view snapshot carries board dimensions and the game-over flag") {
     GameEngine engine{Board{8, 8}};
 
-    GameSnapshot snapshot = buildSnapshot(engine.snapshot(), std::nullopt);
+    GameSnapshot snapshot = buildSnapshot(engine.board(), engine.isOver(), std::nullopt);
 
     CHECK(snapshot.boardWidth == 8);
     CHECK(snapshot.boardHeight == 8);
@@ -35,7 +35,7 @@ TEST_CASE("the view snapshot lists each piece in cell coordinates with its state
     board.addPiece(Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}});
     GameEngine engine{std::move(board)};
 
-    GameSnapshot snapshot = buildSnapshot(engine.snapshot(), std::nullopt);
+    GameSnapshot snapshot = buildSnapshot(engine.board(), engine.isOver(), std::nullopt);
 
     REQUIRE(snapshot.pieces.size() == 1);
     const auto& piece = snapshot.pieces.front();
@@ -48,7 +48,7 @@ TEST_CASE("the view snapshot lists each piece in cell coordinates with its state
 TEST_CASE("the view snapshot passes through the selected cell from the GUI") {
     GameEngine engine{Board{8, 8}};
 
-    GameSnapshot snapshot = buildSnapshot(engine.snapshot(), Position{2, 3});
+    GameSnapshot snapshot = buildSnapshot(engine.board(), engine.isOver(), Position{2, 3});
 
     REQUIRE(snapshot.selectedCell.has_value());
     CHECK(*snapshot.selectedCell == Position{2, 3});

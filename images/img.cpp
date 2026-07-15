@@ -40,17 +40,8 @@ void Img::draw_on(Img& other_img, int x, int y) {
         throw std::runtime_error("Both images must be loaded before drawing.");
     }
 
-    // Handle different channel counts
     cv::Mat source_img = img;
     cv::Mat target_img = other_img.img;
-    
-    if (source_img.channels() != target_img.channels()) {
-        if (source_img.channels() == 3 && target_img.channels() == 4) {
-            cv::cvtColor(source_img, source_img, cv::COLOR_BGR2BGRA);
-        } else if (source_img.channels() == 4 && target_img.channels() == 3) {
-            cv::cvtColor(source_img, source_img, cv::COLOR_BGRA2BGR);
-        }
-    }
 
     int h = source_img.rows;
     int w = source_img.cols;
@@ -63,19 +54,53 @@ void Img::draw_on(Img& other_img, int x, int y) {
 
     cv::Mat roi = target_img(cv::Rect(x, y, w, h));
 
-    if (source_img.channels() == 4) {
-        // Handle alpha blending for BGRA images
-        std::vector<cv::Mat> channels;
-        cv::split(source_img, channels);
-        cv::Mat alpha = channels[3] / 255.0;
-        
-        for (int c = 0; c < 3; ++c) {
-            roi.col(c) = (1.0 - alpha) * roi.col(c) + alpha * channels[c];
+    if (source_img.channels() != 4) {
+        cv::Mat opaque = source_img;
+        if (opaque.channels() != target_img.channels()) {
+            cv::cvtColor(opaque, opaque,
+                         target_img.channels() == 4 ? cv::COLOR_BGR2BGRA
+                                                    : cv::COLOR_BGRA2BGR);
         }
-    } else {
-        // Direct copy for BGR images
-        source_img.copyTo(roi);
+        opaque.copyTo(roi);
+        return;
     }
+
+    // Blend the source over the region it covers, per pixel and per colour
+    // channel: out = src * alpha + dst * (1 - alpha). The alpha is scaled into
+    // floats first, because dividing the 8-bit channel would round every pixel
+    // to a flat 0 or 1 and throw the gradations away.
+    std::vector<cv::Mat> source_channels;
+    cv::split(source_img, source_channels);
+
+    cv::Mat alpha;
+    source_channels[3].convertTo(alpha, CV_32F, 1.0 / 255.0);
+    cv::Mat inverse_alpha = 1.0 - alpha;
+
+    std::vector<cv::Mat> roi_channels;
+    cv::split(roi, roi_channels);
+
+    for (int c = 0; c < 3; ++c) {
+        cv::Mat source_c;
+        cv::Mat target_c;
+        source_channels[c].convertTo(source_c, CV_32F);
+        roi_channels[c].convertTo(target_c, CV_32F);
+
+        cv::Mat blended = source_c.mul(alpha) + target_c.mul(inverse_alpha);
+        blended.convertTo(roi_channels[c], roi_channels[c].type());
+    }
+
+    // A transparent target pixel must end up as opaque as what was drawn onto
+    // it, otherwise the result stays invisible on a transparent background.
+    if (roi_channels.size() == 4) {
+        cv::Mat target_alpha;
+        roi_channels[3].convertTo(target_alpha, CV_32F, 1.0 / 255.0);
+        cv::Mat blended_alpha = alpha + target_alpha.mul(inverse_alpha);
+        blended_alpha.convertTo(roi_channels[3], roi_channels[3].type(), 255.0);
+    }
+
+    cv::Mat blended_roi;
+    cv::merge(roi_channels, blended_roi);
+    blended_roi.copyTo(roi);
 }
 
 void Img::put_text(const std::string& txt, int x, int y, double font_size,

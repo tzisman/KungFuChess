@@ -14,11 +14,11 @@ void printParseError(const ParseError& error, std::ostream& out) {
     out << kErrorPrefix << error.code << '\n';
 }
 
-void printBoard(const engine::GameSnapshot& snapshot, std::ostream& out) {
-    for (int row = 0; row < snapshot.height(); ++row) {
-        for (int col = 0; col < snapshot.width(); ++col) {
+void printBoard(const model::Board& board, std::ostream& out) {
+    for (int row = 0; row < board.height(); ++row) {
+        for (int col = 0; col < board.width(); ++col) {
             if (col > 0) out << ' ';
-            out << encodeCell(snapshot.pieceAt(model::Position{row, col}));
+            out << encodeCell(board.pieceAt(model::Position{row, col}));
         }
         out << '\n';
     }

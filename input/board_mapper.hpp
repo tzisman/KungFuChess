@@ -3,20 +3,24 @@
 #include <optional>
 
 #include "model/position.hpp"
+#include "view/board_geometry.hpp"
 
 namespace kfc::input {
 
-inline constexpr int kCellSize = 100;
-
+// Turns a pixel the user clicked into a board cell. The measurements come from
+// the geometry it is given, so the same mapper serves any board size; call
+// setGeometry when the board is displayed at a different size.
 class BoardMapper {
 public:
-    BoardMapper(int width, int height);
+    explicit BoardMapper(view::BoardGeometry geometry);
+
+    void setGeometry(view::BoardGeometry geometry);
+    const view::BoardGeometry& geometry() const;
 
     std::optional<model::Position> toCell(int x, int y) const;
 
 private:
-    int width_;
-    int height_;
+    view::BoardGeometry geometry_;
 };
 
 }

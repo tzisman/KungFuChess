@@ -26,7 +26,7 @@ void ScriptRunner::run(const Command& command) {
                    [&](const JumpCommand& c) { controller_.handleJump(c.x, c.y); },
                    [&](const WaitCommand& c) { engine_.wait(c.ms); },
                    [&](const PrintBoardCommand&) {
-                       io::printBoard(engine_.snapshot(), out_);
+                       io::printBoard(engine_.board(), out_);
                    },
                },
                command);

@@ -8,7 +8,11 @@ bool RealTimeArbiter::startMotion(model::Position from, model::Position to) {
     if (hasActiveMotion()) {
         return false;
     }
-    active_.emplace_back(from, to);
+    std::optional<model::Piece> mover = board_.pieceAt(from);
+    if (!mover) {
+        return false;
+    }
+    active_.emplace_back(mover->id(), from, to);
     board_.setPieceState(from, model::PieceState::kMoving);
     return true;
 }
@@ -28,7 +32,9 @@ std::vector<ArrivalReport> RealTimeArbiter::advance(int deltaMs) {
     for (auto it = active_.begin(); it != active_.end();) {
         it->advance(deltaMs);
         if (it->hasArrived()) {
-            reports.push_back(resolveArrival(*it));
+            if (std::optional<ArrivalReport> report = resolveArrival(*it)) {
+                reports.push_back(*report);
+            }
             it = active_.erase(it);
         } else {
             ++it;
@@ -38,15 +44,18 @@ std::vector<ArrivalReport> RealTimeArbiter::advance(int deltaMs) {
     return reports;
 }
 
-ArrivalReport RealTimeArbiter::resolveArrival(const Motion& motion) {
+std::optional<ArrivalReport> RealTimeArbiter::resolveArrival(const Motion& motion) {
     model::Position from = motion.from();
     model::Position to = motion.to();
 
     std::optional<model::Piece> arriver = board_.pieceAt(from);
+    if (!arriver || arriver->id() != motion.pieceId()) {
+        return std::nullopt;
+    }
     std::optional<model::Piece> occupant = board_.pieceAt(to);
 
     if (occupant && occupant->state() == model::PieceState::kAirborne &&
-        arriver && arriver->color() != occupant->color()) {
+        arriver->color() != occupant->color()) {
         jumpAt(to)->lift(*occupant);
         board_.removePiece(to);
         board_.movePiece(from, to);

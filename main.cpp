@@ -8,8 +8,10 @@
 #include "input/controller.hpp"
 #include "io/board_parser.hpp"
 #include "io/board_printer.hpp"
+#include "model/board.hpp"
 #include "texttests/script_parser.hpp"
 #include "texttests/script_runner.hpp"
+#include "view/board_geometry.hpp"
 
 //https://github.com/tzisman/KungFuChess
 
@@ -18,8 +20,11 @@ int main() {
         kfc::io::ParsedInput parsed = kfc::io::parseInput(std::cin);
 
         kfc::engine::GameEngine engine{std::move(parsed.board)};
-        kfc::engine::GameSnapshot snapshot = engine.snapshot();
-        kfc::input::BoardMapper mapper{snapshot.width(), snapshot.height()};
+        const kfc::model::Board& board = engine.board();
+        kfc::input::BoardMapper mapper{kfc::view::BoardGeometry{
+            board.width() * kfc::texttests::kCellSize,
+            board.height() * kfc::texttests::kCellSize, board.width(),
+            board.height()}};
         kfc::input::Controller controller{engine, mapper};
         kfc::texttests::ScriptRunner runner{controller, engine, std::cout};
 

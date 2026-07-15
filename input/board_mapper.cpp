@@ -1,18 +1,20 @@
 #include "input/board_mapper.hpp"
 
+#include <utility>
+
 namespace kfc::input {
 
-BoardMapper::BoardMapper(int width, int height)
-    : width_(width), height_(height) {}
+BoardMapper::BoardMapper(view::BoardGeometry geometry)
+    : geometry_(std::move(geometry)) {}
+
+void BoardMapper::setGeometry(view::BoardGeometry geometry) {
+    geometry_ = std::move(geometry);
+}
+
+const view::BoardGeometry& BoardMapper::geometry() const { return geometry_; }
 
 std::optional<model::Position> BoardMapper::toCell(int x, int y) const {
-    if (x < 0 || y < 0) return std::nullopt;
-
-    int col = x / kCellSize;
-    int row = y / kCellSize;
-    if (row >= height_ || col >= width_) return std::nullopt;
-
-    return model::Position{row, col};
+    return geometry_.cellAt(x, y);
 }
 
 }

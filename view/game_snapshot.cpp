@@ -4,12 +4,12 @@ namespace kfc::view {
 
 namespace {
 
-std::vector<PieceView> collectPieces(const engine::GameSnapshot& state) {
+std::vector<PieceView> collectPieces(const model::Board& board) {
     std::vector<PieceView> pieces;
-    for (int row = 0; row < state.height(); ++row) {
-        for (int col = 0; col < state.width(); ++col) {
+    for (int row = 0; row < board.height(); ++row) {
+        for (int col = 0; col < board.width(); ++col) {
             model::Position cell{row, col};
-            std::optional<model::Piece> piece = state.pieceAt(cell);
+            std::optional<model::Piece> piece = board.pieceAt(cell);
             if (!piece) continue;
             pieces.push_back({piece->kind(), piece->color(), cell, piece->state()});
         }
@@ -19,10 +19,10 @@ std::vector<PieceView> collectPieces(const engine::GameSnapshot& state) {
 
 }
 
-GameSnapshot buildSnapshot(const engine::GameSnapshot& state,
+GameSnapshot buildSnapshot(const model::Board& board, bool gameOver,
                            const std::optional<model::Position>& selection) {
-    return {state.width(), state.height(), collectPieces(state), selection,
-            state.isOver()};
+    return {board.width(), board.height(), collectPieces(board), selection,
+            gameOver};
 }
 
 }

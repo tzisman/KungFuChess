@@ -15,6 +15,7 @@ using kfc::model::PieceKind;
 using kfc::model::Position;
 using kfc::realtime::ArrivalReport;
 using kfc::realtime::kSquareTravelMs;
+using kfc::realtime::Motion;
 using kfc::realtime::RealTimeArbiter;
 using kfc::realtime::travelDurationMs;
 
@@ -101,6 +102,22 @@ TEST_CASE("only one motion may be active at a time") {
 
     CHECK(arbiter.startMotion(Position{4, 4}, Position{4, 7}));
     CHECK_FALSE(arbiter.startMotion(Position{0, 0}, Position{0, 3}));
+}
+
+TEST_CASE("starting a motion from an empty cell is refused") {
+    Board board{8, 8};
+    RealTimeArbiter arbiter{board};
+
+    CHECK_FALSE(arbiter.startMotion(Position{4, 4}, Position{4, 7}));
+}
+
+TEST_CASE("a motion carries the identity of the piece that started it") {
+    Motion motion{7, Position{4, 4}, Position{4, 7}};
+
+    CHECK(motion.pieceId() == 7);
+    CHECK(motion.from() == Position{4, 4});
+    CHECK(motion.to() == Position{4, 7});
+    CHECK(motion.durationMs() == 3 * kSquareTravelMs);
 }
 
 TEST_CASE("a new motion is allowed once the previous one arrives") {

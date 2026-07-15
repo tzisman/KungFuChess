@@ -19,12 +19,6 @@ constexpr std::array<KindLetter, 6> kKindLetters{{
     {model::PieceKind::kPawn, 'P'},
 }};
 
-char letterOf(model::PieceKind kind) {
-    for (const KindLetter& entry : kKindLetters)
-        if (entry.kind == kind) return entry.letter;
-    return '?';
-}
-
 std::optional<model::PieceKind> kindOf(char letter) {
     for (const KindLetter& entry : kKindLetters)
         if (entry.letter == letter) return entry.kind;
@@ -37,11 +31,17 @@ std::optional<model::Color> colorOf(char c) {
     return std::nullopt;
 }
 
-char charOf(model::Color color) {
-    return color == model::Color::kWhite ? kWhiteChar : kBlackChar;
+}  // namespace
+
+char kindLetter(model::PieceKind kind) {
+    for (const KindLetter& entry : kKindLetters)
+        if (entry.kind == kind) return entry.letter;
+    return '?';
 }
 
-}  // namespace
+char colorLetter(model::Color color) {
+    return color == model::Color::kWhite ? kWhiteChar : kBlackChar;
+}
 
 bool isEmptyToken(const std::string& token) {
     return token.size() == 1 && token[0] == kEmptyToken;
@@ -58,8 +58,8 @@ std::optional<PieceCode> pieceFromToken(const std::string& token) {
 std::string encodeCell(const std::optional<model::Piece>& cell) {
     if (!cell) return std::string(1, kEmptyToken);
     std::string token;
-    token += charOf(cell->color());
-    token += letterOf(cell->kind());
+    token += colorLetter(cell->color());
+    token += kindLetter(cell->kind());
     return token;
 }
 

@@ -27,7 +27,7 @@ const std::optional<model::Position>& Controller::selection() const {
 
 void Controller::handleFirstClick(std::optional<model::Position> cell) {
     if (!cell) return;
-    if (!engine_.snapshot().pieceAt(*cell)) return;
+    if (!engine_.board().pieceAt(*cell)) return;
     selected_ = cell;
 }
 
@@ -45,9 +45,9 @@ void Controller::handleSecondClick(std::optional<model::Position> cell) {
 }
 
 bool Controller::isOwnPiece(model::Position cell) const {
-    engine::GameSnapshot snapshot = engine_.snapshot();
-    std::optional<model::Piece> target = snapshot.pieceAt(cell);
-    std::optional<model::Piece> selectedPiece = snapshot.pieceAt(*selected_);
+    const model::Board& board = engine_.board();
+    std::optional<model::Piece> target = board.pieceAt(cell);
+    std::optional<model::Piece> selectedPiece = board.pieceAt(*selected_);
     return target && selectedPiece && target->color() == selectedPiece->color();
 }
 

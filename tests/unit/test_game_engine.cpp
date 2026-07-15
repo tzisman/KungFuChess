@@ -7,7 +7,6 @@
 #include "realtime/motion.hpp"
 
 using kfc::engine::GameEngine;
-using kfc::engine::GameSnapshot;
 using kfc::engine::MoveResult;
 using kfc::model::Board;
 using kfc::model::Color;
@@ -96,9 +95,8 @@ TEST_CASE("wait advances the board through the arbiter") {
 
     engine.wait(3 * kSquareTravelMs);
 
-    GameSnapshot snapshot = engine.snapshot();
-    CHECK_FALSE(snapshot.pieceAt(Position{4, 4}).has_value());
-    CHECK(snapshot.pieceAt(Position{4, 7}).has_value());
+    CHECK_FALSE(engine.board().pieceAt(Position{4, 4}).has_value());
+    CHECK(engine.board().pieceAt(Position{4, 7}).has_value());
 }
 
 TEST_CASE("capturing the king ends the game") {
@@ -111,7 +109,6 @@ TEST_CASE("capturing the king ends the game") {
     engine.wait(2 * kSquareTravelMs);
 
     CHECK(engine.isOver());
-    CHECK(engine.snapshot().isOver());
 }
 
 TEST_CASE("moves are rejected once the game is over") {
@@ -134,8 +131,7 @@ TEST_CASE("a pawn reaching the last row is promoted to a queen") {
 
     engine.wait(kSquareTravelMs);
 
-    GameSnapshot snapshot = engine.snapshot();
-    auto piece = snapshot.pieceAt(Position{0, 4});
+    auto piece = engine.board().pieceAt(Position{0, 4});
     REQUIRE(piece.has_value());
     CHECK(piece->kind() == PieceKind::kQueen);
 }
@@ -189,14 +185,5 @@ TEST_CASE("an airborne piece capturing an arriving king ends the game") {
     engine.wait(kSquareTravelMs);
 
     CHECK(engine.isOver());
-    CHECK(engine.snapshot().pieceAt(Position{4, 4})->kind() == PieceKind::kRook);
-}
-
-TEST_CASE("the snapshot exposes the board dimensions") {
-    GameEngine engine{Board{8, 8}};
-
-    GameSnapshot snapshot = engine.snapshot();
-
-    CHECK(snapshot.width() == 8);
-    CHECK(snapshot.height() == 8);
+    CHECK(engine.board().pieceAt(Position{4, 4})->kind() == PieceKind::kRook);
 }

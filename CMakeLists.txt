@@ -35,6 +35,7 @@ add_library(kfc
     engine/game_engine.cpp
     input/board_mapper.cpp
     input/controller.cpp
+    view/board_geometry.cpp
     view/game_snapshot.cpp
     io/piece_codec.cpp
     io/board_parser.cpp
@@ -48,10 +49,19 @@ target_include_directories(kfc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(kungfu_chess main.cpp)
 target_link_libraries(kungfu_chess PRIVATE kfc)
 
-# GUI demo: opens a window and displays the board image via the view layer.
-add_executable(view_demo view/view_demo.cpp view/image_view.cpp)
-target_include_directories(view_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(view_demo PRIVATE kfc_img)
+# The drawing half of the GUI. It is a library of its own so that it can be
+# tested, and so that its dependency on the image backend stays visible here
+# instead of leaking into the logic library.
+add_library(kfc_view
+    view/sprite_library.cpp
+    view/renderer.cpp
+    view/window.cpp
+)
+target_link_libraries(kfc_view PUBLIC kfc kfc_img)
+
+# Composition root of the GUI: wires the logic, the view and the window.
+add_executable(view_demo view/view_demo.cpp)
+target_link_libraries(view_demo PRIVATE kfc_view)
 
 # Unit tests. Each tests/unit/test_<module>.cpp is registered here.
 add_executable(unit_tests
@@ -63,6 +73,7 @@ add_executable(unit_tests
     tests/unit/test_rule_engine.cpp
     tests/unit/test_real_time_arbiter.cpp
     tests/unit/test_game_engine.cpp
+    tests/unit/test_board_geometry.cpp
     tests/unit/test_board_mapper.cpp
     tests/unit/test_controller.cpp
     tests/unit/test_game_snapshot.cpp

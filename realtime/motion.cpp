@@ -18,8 +18,11 @@ int travelDurationMs(model::Position from, model::Position to) {
     return cellSteps(from, to) * kSquareTravelMs;
 }
 
-Motion::Motion(model::Position from, model::Position to)
-    : from_(from), to_(to), durationMs_(travelDurationMs(from, to)) {}
+Motion::Motion(model::PieceId pieceId, model::Position from, model::Position to)
+    : pieceId_(pieceId),
+      from_(from),
+      to_(to),
+      durationMs_(travelDurationMs(from, to)) {}
 
 void Motion::advance(int deltaMs) {
     elapsedMs_ += deltaMs;
