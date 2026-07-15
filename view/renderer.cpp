@@ -76,11 +76,19 @@ void Renderer::drawPiece(Img& canvas, const PieceView& piece,
         sprites_.frames(piece.kind, piece.color, animation);
     if (frames.empty()) return;
 
-    Pixel at = pixelOf(piece);
     Img frame =
         frames[frameIndex(piece, animation, static_cast<int>(frames.size()),
                           nowMs)];
+    Pixel at = centeredIn(pixelOf(piece), frame);
     frame.draw_on(canvas, at.x, at.y);
+}
+
+// Keeping its proportions means a sprite rarely fills the cell exactly, so it
+// is centred on the square instead of hanging off the top-left corner.
+Pixel Renderer::centeredIn(Pixel cellTopLeft, const Img& sprite) const {
+    return {cellTopLeft.x + (geometry_.cellWidth() - sprite.get_mat().cols) / 2,
+            cellTopLeft.y +
+                (geometry_.cellHeight() - sprite.get_mat().rows) / 2};
 }
 
 Pixel Renderer::pixelOf(const PieceView& piece) const {

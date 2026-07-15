@@ -81,8 +81,12 @@ void SpriteLibrary::loadPiece(const std::string& piecesRoot,
         std::vector<Img> frames;
         for (const std::filesystem::path& file :
              spriteFilesIn(stateDir / "sprites")) {
+            // Fit inside the cell rather than filling it: the artwork comes in
+            // whatever proportions it was drawn, and stretching it to the cell
+            // would squash the piece.
             Img sprite;
-            sprite.read(file.string(), {cellWidth, cellHeight});
+            sprite.read(file.string(), {cellWidth, cellHeight},
+                        /*keep_aspect=*/true);
             frames.push_back(std::move(sprite));
         }
         frames_.emplace(keyOf(kind, color, animation), std::move(frames));

@@ -65,9 +65,10 @@ double speedInConfig(const std::string& piecesRoot, kfc::model::PieceKind kind,
 kfc::realtime::MotionProfiles loadMotionProfiles(const std::string& piecesRoot) {
     kfc::realtime::MotionProfiles profiles;
     for (kfc::model::PieceKind kind : kfc::model::kAllPieceKinds) {
-        profiles.setTiming(kind,
-                           msPerSquare(speedInConfig(piecesRoot, kind, "move")),
-                           msPerSquare(speedInConfig(piecesRoot, kind, "jump")));
+        profiles.setTiming(
+            kind, msPerSquare(speedInConfig(piecesRoot, kind, "move")),
+            kfc::realtime::kJumpDurationFactor *
+                msPerSquare(speedInConfig(piecesRoot, kind, "jump")));
     }
     return profiles;
 }

@@ -24,6 +24,7 @@ public:
 private:
     static Animation animationFor(model::PieceState state);
     void drawPiece(Img& canvas, const PieceView& piece, int nowMs) const;
+    Pixel centeredIn(Pixel cellTopLeft, const Img& sprite) const;
     void drawRestBar(Img& canvas, const PieceView& piece) const;
     void drawSelection(Img& canvas, model::Position cell) const;
     void drawGameOver(Img& canvas) const;

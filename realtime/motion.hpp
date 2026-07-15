@@ -13,6 +13,10 @@ constexpr int kJumpDurationMs = 1000;
 constexpr int kShortRestMs = 3000;
 constexpr int kLongRestMs = 6000;
 
+// A jump stays in the air for this multiple of the time its configured speed
+// implies, which makes leaving the square a real commitment.
+constexpr int kJumpDurationFactor = 2;
+
 int travelDurationMs(model::Position from, model::Position to,
                      int squareTravelMs = kSquareTravelMs);
 
