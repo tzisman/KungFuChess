@@ -18,9 +18,19 @@ struct ArrivalReport {
     bool landed = true;
 };
 
+// How far along a cell's piece is in whatever it is doing right now: the cell
+// it is travelling toward (if any), the fraction of the way through, and how
+// long it has been in its current state. An unoccupied or idle cell reports
+// zero progress.
+struct CellProgress {
+    std::optional<model::Position> movingTo;
+    double progress = 0.0;
+    int stateElapsedMs = 0;
+};
+
 class RealTimeArbiter {
 public:
-    explicit RealTimeArbiter(model::Board& board);
+    explicit RealTimeArbiter(model::Board& board, MotionProfiles profiles = {});
 
     bool hasActiveMotion() const { return !active_.empty(); }
 
@@ -28,15 +38,19 @@ public:
     bool startJump(model::Position cell);
     std::vector<ArrivalReport> advance(int deltaMs);
 
+    CellProgress progressAt(model::Position cell) const;
+
 private:
     std::optional<ArrivalReport> resolveArrival(const Motion& motion);
     void landAirborne(int deltaMs, std::vector<ArrivalReport>& reports);
-    void startCooldown(model::PieceId pieceId, model::Position cell);
+    void startShortRest(model::PieceId pieceId, model::Position cell);
+    void startLongRest(model::PieceId pieceId, model::Position cell);
     void tickCooldowns(int deltaMs);
     bool isAirborneAt(model::Position cell) const;
     Jump* jumpAt(model::Position cell);
 
     model::Board& board_;
+    MotionProfiles profiles_;
     std::vector<Motion> active_;
     std::vector<Jump> airborne_;
     std::vector<Cooldown> resting_;

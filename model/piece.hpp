@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <iosfwd>
 
 #include "model/position.hpp"
@@ -11,8 +12,22 @@ using PieceId = int;
 enum class Color { kWhite, kBlack };
 enum class PieceKind { kKing, kQueen, kRook, kBishop, kKnight, kPawn };
 
+inline constexpr std::array<PieceKind, 6> kAllPieceKinds{
+    PieceKind::kKing,   PieceKind::kQueen,  PieceKind::kRook,
+    PieceKind::kBishop, PieceKind::kKnight, PieceKind::kPawn,
+};
 
-enum class PieceState { kIdle, kMoving, kCaptured, kAirborne, kResting };
+inline constexpr std::array<Color, 2> kAllColors{Color::kWhite, Color::kBlack};
+
+
+enum class PieceState {
+    kIdle,
+    kMoving,
+    kCaptured,
+    kAirborne,
+    kShortResting,
+    kLongResting,
+};
 
 class Piece {
 public:

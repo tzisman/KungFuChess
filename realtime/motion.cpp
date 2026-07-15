@@ -14,28 +14,44 @@ int cellSteps(model::Position from, model::Position to) {
 
 }
 
-int travelDurationMs(model::Position from, model::Position to) {
-    return cellSteps(from, to) * kSquareTravelMs;
+int travelDurationMs(model::Position from, model::Position to,
+                     int squareTravelMs) {
+    return cellSteps(from, to) * squareTravelMs;
 }
 
-Motion::Motion(model::PieceId pieceId, model::Position from, model::Position to)
-    : pieceId_(pieceId),
-      from_(from),
-      to_(to),
-      durationMs_(travelDurationMs(from, to)) {}
+void MotionProfiles::setTiming(model::PieceKind kind, int squareTravelMs,
+                               int jumpDurationMs) {
+    timings_[kind] = Timing{squareTravelMs, jumpDurationMs};
+}
+
+int MotionProfiles::squareTravelMs(model::PieceKind kind) const {
+    auto it = timings_.find(kind);
+    return it == timings_.end() ? kSquareTravelMs : it->second.squareTravelMs;
+}
+
+int MotionProfiles::jumpDurationMs(model::PieceKind kind) const {
+    auto it = timings_.find(kind);
+    return it == timings_.end() ? kJumpDurationMs : it->second.jumpDurationMs;
+}
+
+Motion::Motion(model::PieceId pieceId, model::Position from,
+               model::Position to, int durationMs)
+    : pieceId_(pieceId), from_(from), to_(to), durationMs_(durationMs) {}
 
 void Motion::advance(int deltaMs) {
     elapsedMs_ += deltaMs;
 }
 
-Jump::Jump(model::Position cell) : cell_(cell) {}
+Jump::Jump(model::Position cell, int durationMs)
+    : cell_(cell), durationMs_(durationMs) {}
 
 void Jump::advance(int deltaMs) {
     elapsedMs_ += deltaMs;
 }
 
-Cooldown::Cooldown(model::PieceId pieceId, model::Position cell)
-    : pieceId_(pieceId), cell_(cell) {}
+Cooldown::Cooldown(model::PieceId pieceId, model::Position cell,
+                   int durationMs)
+    : pieceId_(pieceId), cell_(cell), durationMs_(durationMs) {}
 
 void Cooldown::advance(int deltaMs) {
     elapsedMs_ += deltaMs;

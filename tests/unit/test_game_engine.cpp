@@ -13,7 +13,7 @@ using kfc::model::Color;
 using kfc::model::Piece;
 using kfc::model::PieceKind;
 using kfc::model::Position;
-using kfc::realtime::kCooldownMs;
+using kfc::realtime::kLongRestMs;
 using kfc::realtime::kSquareTravelMs;
 
 namespace {
@@ -72,7 +72,7 @@ TEST_CASE("a piece that just arrived is resting and cannot move yet") {
     GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
     engine.requestMove(Position{4, 4}, Position{4, 7});
 
-    engine.wait(3 * kSquareTravelMs);
+    engine.advance(3 * kSquareTravelMs);
 
     MoveResult result = engine.requestMove(Position{4, 7}, Position{4, 4});
     CHECK_FALSE(result.isAccepted);
@@ -83,8 +83,8 @@ TEST_CASE("a new move is allowed once the cooldown after arrival elapses") {
     GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
     engine.requestMove(Position{4, 4}, Position{4, 7});
 
-    engine.wait(3 * kSquareTravelMs);
-    engine.wait(kCooldownMs);
+    engine.advance(3 * kSquareTravelMs);
+    engine.advance(kLongRestMs);
 
     CHECK(engine.requestMove(Position{4, 7}, Position{4, 4}).isAccepted);
 }
@@ -93,7 +93,7 @@ TEST_CASE("wait advances the board through the arbiter") {
     GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
     engine.requestMove(Position{4, 4}, Position{4, 7});
 
-    engine.wait(3 * kSquareTravelMs);
+    engine.advance(3 * kSquareTravelMs);
 
     CHECK_FALSE(engine.board().pieceAt(Position{4, 4}).has_value());
     CHECK(engine.board().pieceAt(Position{4, 7}).has_value());
@@ -106,7 +106,7 @@ TEST_CASE("capturing the king ends the game") {
     })};
     engine.requestMove(Position{4, 4}, Position{4, 6});
 
-    engine.wait(2 * kSquareTravelMs);
+    engine.advance(2 * kSquareTravelMs);
 
     CHECK(engine.isOver());
 }
@@ -117,7 +117,7 @@ TEST_CASE("moves are rejected once the game is over") {
         Piece{2, Color::kBlack, PieceKind::kKing, Position{4, 6}},
     })};
     engine.requestMove(Position{4, 4}, Position{4, 6});
-    engine.wait(2 * kSquareTravelMs);
+    engine.advance(2 * kSquareTravelMs);
 
     MoveResult result = engine.requestMove(Position{4, 6}, Position{4, 5});
 
@@ -129,7 +129,7 @@ TEST_CASE("a pawn reaching the last row is promoted to a queen") {
     GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kPawn, Position{1, 4}}})};
     engine.requestMove(Position{1, 4}, Position{0, 4});
 
-    engine.wait(kSquareTravelMs);
+    engine.advance(kSquareTravelMs);
 
     auto piece = engine.board().pieceAt(Position{0, 4});
     REQUIRE(piece.has_value());
@@ -182,7 +182,7 @@ TEST_CASE("an airborne piece capturing an arriving king ends the game") {
     engine.requestJump(Position{4, 4});
     engine.requestMove(Position{4, 5}, Position{4, 4});
 
-    engine.wait(kSquareTravelMs);
+    engine.advance(kSquareTravelMs);
 
     CHECK(engine.isOver());
     CHECK(engine.board().pieceAt(Position{4, 4})->kind() == PieceKind::kRook);

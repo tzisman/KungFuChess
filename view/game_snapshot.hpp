@@ -3,7 +3,7 @@
 #include <optional>
 #include <vector>
 
-#include "model/board.hpp"
+#include "engine/game_engine.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"
 
@@ -14,6 +14,9 @@ struct PieceView {
     model::Color color;
     model::Position cell;
     model::PieceState state;
+    std::optional<model::Position> movingTo;
+    double progress = 0.0;
+    int stateElapsedMs = 0;
 };
 
 struct GameSnapshot {
@@ -24,7 +27,7 @@ struct GameSnapshot {
     bool gameOver;
 };
 
-GameSnapshot buildSnapshot(const model::Board& board, bool gameOver,
+GameSnapshot buildSnapshot(const engine::GameEngine& engine,
                            const std::optional<model::Position>& selection);
 
 }

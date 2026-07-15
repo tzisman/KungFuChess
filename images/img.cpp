@@ -114,11 +114,17 @@ void Img::put_text(const std::string& txt, int x, int y, double font_size,
                 color, thickness, cv::LINE_AA);
 }
 
+Img Img::clone() const {
+    Img copy;
+    copy.img = img.clone();
+    return copy;
+}
+
 void Img::show() {
     if (img.empty()) {
         throw std::runtime_error("Image not loaded.");
     }
-    
+
     cv::imshow("Image", img);
     cv::waitKey(0);
     cv::destroyAllWindows();

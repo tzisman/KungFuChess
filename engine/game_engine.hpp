@@ -22,16 +22,18 @@ struct MoveResult {
 
 class GameEngine {
 public:
-    explicit GameEngine(model::Board board);
+    explicit GameEngine(model::Board board,
+                        realtime::MotionProfiles profiles = {});
 
     GameEngine(const GameEngine&) = delete;
     GameEngine& operator=(const GameEngine&) = delete;
 
     MoveResult requestMove(model::Position from, model::Position to);
     MoveResult requestJump(model::Position cell);
-    void wait(int ms);
+    void advance(int ms);
 
     const model::Board& board() const;
+    realtime::CellProgress progressAt(model::Position cell) const;
     bool isOver() const;
 
 private:

@@ -38,12 +38,14 @@ add_library(kfc
     view/board_geometry.cpp
     view/game_snapshot.cpp
     io/piece_codec.cpp
+    io/piece_config.cpp
     io/board_parser.cpp
     io/board_printer.cpp
     texttests/script_parser.cpp
     texttests/script_runner.cpp
 )
 target_include_directories(kfc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(kfc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 
 # Composition root: reads a VPL script on stdin and prints board output.
 add_executable(kungfu_chess main.cpp)
@@ -79,6 +81,7 @@ add_executable(unit_tests
     tests/unit/test_game_snapshot.cpp
     tests/unit/test_board_parser.cpp
     tests/unit/test_board_printer.cpp
+    tests/unit/test_piece_config.cpp
     tests/unit/test_script_parser.cpp
 )
 target_link_libraries(unit_tests PRIVATE doctest kfc)

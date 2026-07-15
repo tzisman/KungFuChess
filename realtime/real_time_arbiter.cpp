@@ -1,8 +1,21 @@
 #include "realtime/real_time_arbiter.hpp"
 
+#include <algorithm>
+#include <utility>
+
 namespace kfc::realtime {
 
-RealTimeArbiter::RealTimeArbiter(model::Board& board) : board_(board) {}
+namespace {
+
+double fractionOf(int elapsedMs, int durationMs) {
+    if (durationMs <= 0) return 1.0;
+    return std::min(1.0, static_cast<double>(elapsedMs) / durationMs);
+}
+
+}
+
+RealTimeArbiter::RealTimeArbiter(model::Board& board, MotionProfiles profiles)
+    : board_(board), profiles_(std::move(profiles)) {}
 
 bool RealTimeArbiter::startMotion(model::Position from, model::Position to) {
     if (hasActiveMotion()) {
@@ -12,7 +25,9 @@ bool RealTimeArbiter::startMotion(model::Position from, model::Position to) {
     if (!mover) {
         return false;
     }
-    active_.emplace_back(mover->id(), from, to);
+    int durationMs =
+        travelDurationMs(from, to, profiles_.squareTravelMs(mover->kind()));
+    active_.emplace_back(mover->id(), from, to, durationMs);
     board_.setPieceState(from, model::PieceState::kMoving);
     return true;
 }
@@ -21,7 +36,11 @@ bool RealTimeArbiter::startJump(model::Position cell) {
     if (isAirborneAt(cell)) {
         return false;
     }
-    airborne_.emplace_back(cell);
+    std::optional<model::Piece> jumper = board_.pieceAt(cell);
+    if (!jumper) {
+        return false;
+    }
+    airborne_.emplace_back(cell, profiles_.jumpDurationMs(jumper->kind()));
     board_.setPieceState(cell, model::PieceState::kAirborne);
     return true;
 }
@@ -44,6 +63,31 @@ std::vector<ArrivalReport> RealTimeArbiter::advance(int deltaMs) {
     return reports;
 }
 
+CellProgress RealTimeArbiter::progressAt(model::Position cell) const {
+    for (const Motion& motion : active_) {
+        if (motion.from() == cell) {
+            return {motion.to(),
+                    fractionOf(motion.elapsedMs(), motion.durationMs()),
+                    motion.elapsedMs()};
+        }
+    }
+    for (const Jump& jump : airborne_) {
+        if (jump.cell() == cell) {
+            return {std::nullopt,
+                    fractionOf(jump.elapsedMs(), jump.durationMs()),
+                    jump.elapsedMs()};
+        }
+    }
+    for (const Cooldown& cooldown : resting_) {
+        if (cooldown.cell() == cell) {
+            return {std::nullopt,
+                    fractionOf(cooldown.elapsedMs(), cooldown.durationMs()),
+                    cooldown.elapsedMs()};
+        }
+    }
+    return {};
+}
+
 std::optional<ArrivalReport> RealTimeArbiter::resolveArrival(const Motion& motion) {
     model::Position from = motion.from();
     model::Position to = motion.to();
@@ -59,7 +103,7 @@ std::optional<ArrivalReport> RealTimeArbiter::resolveArrival(const Motion& motio
         jumpAt(to)->lift(*occupant);
         board_.removePiece(to);
         board_.movePiece(from, to);
-        startCooldown(board_.pieceAt(to)->id(), to);
+        startLongRest(board_.pieceAt(to)->id(), to);
         return ArrivalReport{to, std::nullopt, false, true};
     }
 
@@ -67,7 +111,7 @@ std::optional<ArrivalReport> RealTimeArbiter::resolveArrival(const Motion& motio
         board_.removePiece(to);
     }
     board_.movePiece(from, to);
-    startCooldown(board_.pieceAt(to)->id(), to);
+    startLongRest(board_.pieceAt(to)->id(), to);
 
     bool kingCaptured =
         occupant && occupant->kind() == model::PieceKind::kKing;
@@ -92,22 +136,28 @@ void RealTimeArbiter::landAirborne(int deltaMs,
             model::Piece lander = it->lifted();
             lander.setCell(cell);
             board_.addPiece(lander);
-            startCooldown(lander.id(), cell);
+            startShortRest(lander.id(), cell);
 
             bool kingCaptured =
                 victim && victim->kind() == model::PieceKind::kKing;
             reports.push_back(ArrivalReport{cell, victim, kingCaptured, false});
         } else {
-            startCooldown(board_.pieceAt(cell)->id(), cell);
+            startShortRest(board_.pieceAt(cell)->id(), cell);
         }
         it = airborne_.erase(it);
     }
 }
 
-void RealTimeArbiter::startCooldown(model::PieceId pieceId,
+void RealTimeArbiter::startShortRest(model::PieceId pieceId,
+                                     model::Position cell) {
+    board_.setPieceState(cell, model::PieceState::kShortResting);
+    resting_.emplace_back(pieceId, cell, kShortRestMs);
+}
+
+void RealTimeArbiter::startLongRest(model::PieceId pieceId,
                                     model::Position cell) {
-    board_.setPieceState(cell, model::PieceState::kResting);
-    resting_.emplace_back(pieceId, cell);
+    board_.setPieceState(cell, model::PieceState::kLongResting);
+    resting_.emplace_back(pieceId, cell, kLongRestMs);
 }
 
 void RealTimeArbiter::tickCooldowns(int deltaMs) {
@@ -120,7 +170,8 @@ void RealTimeArbiter::tickCooldowns(int deltaMs) {
 
         std::optional<model::Piece> piece = board_.pieceAt(it->cell());
         if (piece && piece->id() == it->pieceId() &&
-            piece->state() == model::PieceState::kResting) {
+            (piece->state() == model::PieceState::kShortResting ||
+             piece->state() == model::PieceState::kLongResting)) {
             board_.setPieceState(it->cell(), model::PieceState::kIdle);
         }
         it = resting_.erase(it);

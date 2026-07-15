@@ -4,10 +4,12 @@
 #include <array>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <utility>
 
 #include "io/piece_codec.hpp"
+#include "io/piece_config.hpp"
 
 namespace kfc::view {
 namespace {
@@ -19,15 +21,6 @@ constexpr std::array<std::pair<Animation, const char*>, 5> kAnimationDirs{{
     {Animation::kLongRest, "long_rest"},
     {Animation::kShortRest, "short_rest"},
 }};
-
-constexpr std::array<model::PieceKind, 6> kKinds{{
-    model::PieceKind::kKing, model::PieceKind::kQueen,
-    model::PieceKind::kRook, model::PieceKind::kBishop,
-    model::PieceKind::kKnight, model::PieceKind::kPawn,
-}};
-
-constexpr std::array<model::Color, 2> kColors{
-    {model::Color::kWhite, model::Color::kBlack}};
 
 const char* dirOf(Animation animation) {
     for (const auto& entry : kAnimationDirs)
@@ -72,8 +65,8 @@ std::vector<std::filesystem::path> spriteFilesIn(
 
 SpriteLibrary::SpriteLibrary(const std::string& piecesRoot, int cellWidth,
                              int cellHeight) {
-    for (model::PieceKind kind : kKinds)
-        for (model::Color color : kColors)
+    for (model::PieceKind kind : model::kAllPieceKinds)
+        for (model::Color color : model::kAllColors)
             loadPiece(piecesRoot, kind, color, cellWidth, cellHeight);
 }
 
@@ -81,17 +74,27 @@ void SpriteLibrary::loadPiece(const std::string& piecesRoot,
                               model::PieceKind kind, model::Color color,
                               int cellWidth, int cellHeight) {
     for (const auto& [animation, dirName] : kAnimationDirs) {
-        std::filesystem::path dir = std::filesystem::path(piecesRoot) /
-                                    pieceCode(kind, color) / "states" /
-                                    dirName / "sprites";
+        std::filesystem::path stateDir = std::filesystem::path(piecesRoot) /
+                                         pieceCode(kind, color) / "states" /
+                                         dirName;
 
         std::vector<Img> frames;
-        for (const std::filesystem::path& file : spriteFilesIn(dir)) {
+        for (const std::filesystem::path& file :
+             spriteFilesIn(stateDir / "sprites")) {
             Img sprite;
             sprite.read(file.string(), {cellWidth, cellHeight});
             frames.push_back(std::move(sprite));
         }
         frames_.emplace(keyOf(kind, color, animation), std::move(frames));
+
+        std::ifstream configFile{stateDir / "config.json"};
+        if (!configFile) {
+            throw std::runtime_error("Missing config.json in " +
+                                     stateDir.string());
+        }
+        io::StateConfig config = io::parseStateConfig(configFile);
+        specs_.emplace(keyOf(kind, color, animation),
+                       AnimationSpec{config.framesPerSec, config.isLoop});
     }
 }
 
@@ -101,6 +104,16 @@ const std::vector<Img>& SpriteLibrary::frames(model::PieceKind kind,
     auto it = frames_.find(keyOf(kind, color, animation));
     if (it == frames_.end())
         throw std::runtime_error("No sprites for " + keyOf(kind, color, animation));
+    return it->second;
+}
+
+const AnimationSpec& SpriteLibrary::spec(model::PieceKind kind,
+                                         model::Color color,
+                                         Animation animation) const {
+    auto it = specs_.find(keyOf(kind, color, animation));
+    if (it == specs_.end())
+        throw std::runtime_error("No animation spec for " +
+                                 keyOf(kind, color, animation));
     return it->second;
 }
 

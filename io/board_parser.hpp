@@ -4,13 +4,10 @@
 #include <string>
 #include <vector>
 
+#include "io/parse_error.hpp"
 #include "model/board.hpp"
 
 namespace kfc::io {
-
-struct ParseError {
-    std::string code;
-};
 
 struct ParsedInput {
     model::Board board;

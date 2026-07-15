@@ -9,8 +9,9 @@
 
 namespace kfc::engine {
 
-GameEngine::GameEngine(model::Board board)
-    : state_(std::move(board)), arbiter_(state_.board()) {}
+GameEngine::GameEngine(model::Board board, realtime::MotionProfiles profiles)
+    : state_(std::move(board)),
+      arbiter_(state_.board(), std::move(profiles)) {}
 
 MoveResult GameEngine::requestMove(model::Position from, model::Position to) {
     if (state_.isOver()) {
@@ -51,7 +52,7 @@ MoveResult GameEngine::requestJump(model::Position cell) {
     return {true, rules::reasonCode(rules::Reason::kOk)};
 }
 
-void GameEngine::wait(int ms) {
+void GameEngine::advance(int ms) {
     std::vector<realtime::ArrivalReport> reports = arbiter_.advance(ms);
     for (const realtime::ArrivalReport& report : reports) {
         if (report.kingCaptured) {
@@ -68,6 +69,10 @@ void GameEngine::wait(int ms) {
 }
 
 const model::Board& GameEngine::board() const { return state_.board(); }
+
+realtime::CellProgress GameEngine::progressAt(model::Position cell) const {
+    return arbiter_.progressAt(cell);
+}
 
 bool GameEngine::isOver() const { return state_.isOver(); }
 

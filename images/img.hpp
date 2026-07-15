@@ -51,6 +51,12 @@ public:
     void show();
     
     /**
+     * Deep copy: the returned image owns its own pixels, so drawing on it
+     * leaves this image untouched
+     */
+    Img clone() const;
+
+    /**
      * Get the underlying OpenCV Mat
      */
     const cv::Mat& get_mat() const { return img; }

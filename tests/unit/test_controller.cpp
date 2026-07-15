@@ -78,7 +78,7 @@ TEST_CASE("a second click inside the board requests the move and clears the sele
 
     CHECK_FALSE(controller.selection().has_value());
 
-    engine.wait(3 * kSquareTravelMs);
+    engine.advance(3 * kSquareTravelMs);
     const auto& board = engine.board();
     CHECK_FALSE(board.pieceAt(Position{4, 4}).has_value());
     CHECK(board.pieceAt(Position{4, 7}).has_value());
@@ -93,7 +93,7 @@ TEST_CASE("a second click outside the board cancels the selection without moving
 
     CHECK_FALSE(controller.selection().has_value());
 
-    engine.wait(3 * kSquareTravelMs);
+    engine.advance(3 * kSquareTravelMs);
     CHECK(engine.board().pieceAt(Position{4, 4}).has_value());
 }
 
@@ -106,7 +106,7 @@ TEST_CASE("an illegal second click still clears the selection and moves nothing"
 
     CHECK_FALSE(controller.selection().has_value());
 
-    engine.wait(3 * kSquareTravelMs);
+    engine.advance(3 * kSquareTravelMs);
     const auto& board = engine.board();
     CHECK(board.pieceAt(Position{4, 4}).has_value());
     CHECK_FALSE(board.pieceAt(Position{5, 5}).has_value());

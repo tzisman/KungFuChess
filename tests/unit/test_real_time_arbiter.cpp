@@ -13,9 +13,15 @@ using kfc::model::Color;
 using kfc::model::Piece;
 using kfc::model::PieceKind;
 using kfc::model::Position;
+using kfc::model::PieceState;
 using kfc::realtime::ArrivalReport;
+using kfc::realtime::CellProgress;
+using kfc::realtime::kJumpDurationMs;
+using kfc::realtime::kLongRestMs;
+using kfc::realtime::kShortRestMs;
 using kfc::realtime::kSquareTravelMs;
 using kfc::realtime::Motion;
+using kfc::realtime::MotionProfiles;
 using kfc::realtime::RealTimeArbiter;
 using kfc::realtime::travelDurationMs;
 
@@ -112,12 +118,36 @@ TEST_CASE("starting a motion from an empty cell is refused") {
 }
 
 TEST_CASE("a motion carries the identity of the piece that started it") {
-    Motion motion{7, Position{4, 4}, Position{4, 7}};
+    Motion motion{7, Position{4, 4}, Position{4, 7},
+                  travelDurationMs(Position{4, 4}, Position{4, 7})};
 
     CHECK(motion.pieceId() == 7);
     CHECK(motion.from() == Position{4, 4});
     CHECK(motion.to() == Position{4, 7});
     CHECK(motion.durationMs() == 3 * kSquareTravelMs);
+}
+
+TEST_CASE("a slower profile stretches the travel time of that kind") {
+    MotionProfiles profiles;
+    profiles.setTiming(PieceKind::kRook, 500, 200);
+
+    CHECK(profiles.squareTravelMs(PieceKind::kRook) == 500);
+    CHECK(profiles.jumpDurationMs(PieceKind::kRook) == 200);
+    CHECK(profiles.squareTravelMs(PieceKind::kPawn) == kSquareTravelMs);
+    CHECK(profiles.jumpDurationMs(PieceKind::kPawn) == kJumpDurationMs);
+}
+
+TEST_CASE("the arbiter times a motion by the moving piece's profile") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    MotionProfiles profiles;
+    profiles.setTiming(PieceKind::kRook, 500, 200);
+    RealTimeArbiter arbiter{board, profiles};
+    arbiter.startMotion(Position{4, 4}, Position{4, 7});
+
+    CHECK(arbiter.advance(3 * 500 - 1).empty());
+    CHECK(arbiter.advance(1).size() == 1);
+    CHECK(board.pieceAt(Position{4, 7}).has_value());
 }
 
 TEST_CASE("a new motion is allowed once the previous one arrives") {
@@ -140,37 +170,35 @@ TEST_CASE("advancing with no active motion reports nothing") {
     CHECK(reports.empty());
 }
 
-TEST_CASE("an airborne piece rests after the jump window, then goes idle") {
+TEST_CASE("an airborne piece rests briefly after the jump, then goes idle") {
     Board board{8, 8};
     place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
     RealTimeArbiter arbiter{board};
 
     CHECK(arbiter.startJump(Position{4, 4}));
-    CHECK(board.pieceAt(Position{4, 4})->state() ==
-          kfc::model::PieceState::kAirborne);
+    CHECK(board.pieceAt(Position{4, 4})->state() == PieceState::kAirborne);
 
-    arbiter.advance(kfc::realtime::kJumpDurationMs);
-    CHECK(board.pieceAt(Position{4, 4})->state() ==
-          kfc::model::PieceState::kResting);
+    arbiter.advance(kJumpDurationMs);
+    CHECK(board.pieceAt(Position{4, 4})->state() == PieceState::kShortResting);
 
-    arbiter.advance(kfc::realtime::kCooldownMs);
-    CHECK(board.pieceAt(Position{4, 4})->state() ==
-          kfc::model::PieceState::kIdle);
+    arbiter.advance(kShortRestMs);
+    CHECK(board.pieceAt(Position{4, 4})->state() == PieceState::kIdle);
 }
 
-TEST_CASE("an arrived piece rests during its cooldown, then goes idle") {
+TEST_CASE("an arrived piece takes the long rest, then goes idle") {
     Board board{8, 8};
     place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
     RealTimeArbiter arbiter{board};
     arbiter.startMotion(Position{4, 4}, Position{4, 7});
 
     arbiter.advance(3 * kSquareTravelMs);
-    CHECK(board.pieceAt(Position{4, 7})->state() ==
-          kfc::model::PieceState::kResting);
+    CHECK(board.pieceAt(Position{4, 7})->state() == PieceState::kLongResting);
 
-    arbiter.advance(kfc::realtime::kCooldownMs);
-    CHECK(board.pieceAt(Position{4, 7})->state() ==
-          kfc::model::PieceState::kIdle);
+    arbiter.advance(kShortRestMs);
+    CHECK(board.pieceAt(Position{4, 7})->state() == PieceState::kLongResting);
+
+    arbiter.advance(kLongRestMs - kShortRestMs);
+    CHECK(board.pieceAt(Position{4, 7})->state() == PieceState::kIdle);
 }
 
 TEST_CASE("capturing a resting piece leaves the capturer resting") {
@@ -186,8 +214,47 @@ TEST_CASE("capturing a resting piece leaves the capturer resting") {
     arbiter.advance(4 * kSquareTravelMs);  // black captures the resting white
 
     CHECK(board.pieceAt(Position{4, 7})->id() == 2);
-    CHECK(board.pieceAt(Position{4, 7})->state() ==
-          kfc::model::PieceState::kResting);
+    CHECK(board.pieceAt(Position{4, 7})->state() == PieceState::kLongResting);
+}
+
+TEST_CASE("progress mid-motion reports the destination and the fraction covered") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    RealTimeArbiter arbiter{board};
+    arbiter.startMotion(Position{4, 4}, Position{4, 7});
+
+    arbiter.advance(3 * kSquareTravelMs / 2);
+
+    CellProgress progress = arbiter.progressAt(Position{4, 4});
+    REQUIRE(progress.movingTo.has_value());
+    CHECK(*progress.movingTo == Position{4, 7});
+    CHECK(progress.progress == doctest::Approx(0.5));
+    CHECK(progress.stateElapsedMs == 3 * kSquareTravelMs / 2);
+}
+
+TEST_CASE("progress of a resting piece has no destination but counts its rest") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    RealTimeArbiter arbiter{board};
+    arbiter.startJump(Position{4, 4});
+    arbiter.advance(kJumpDurationMs);
+    arbiter.advance(kShortRestMs / 3);
+
+    CellProgress progress = arbiter.progressAt(Position{4, 4});
+    CHECK_FALSE(progress.movingTo.has_value());
+    CHECK(progress.stateElapsedMs == kShortRestMs / 3);
+    CHECK(progress.progress == doctest::Approx(1.0 / 3));
+}
+
+TEST_CASE("progress of an idle cell is empty") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    RealTimeArbiter arbiter{board};
+
+    CellProgress progress = arbiter.progressAt(Position{4, 4});
+    CHECK_FALSE(progress.movingTo.has_value());
+    CHECK(progress.progress == doctest::Approx(0.0));
+    CHECK(progress.stateElapsedMs == 0);
 }
 
 TEST_CASE("an enemy arriving mid-jump sits on the cell, airborne piece lifted") {

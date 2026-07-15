@@ -1,11 +1,13 @@
 #include <doctest/doctest.h>
 
 #include <optional>
+#include <utility>
 
 #include "engine/game_engine.hpp"
 #include "model/board.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"
+#include "realtime/motion.hpp"
 #include "view/game_snapshot.hpp"
 
 using kfc::engine::GameEngine;
@@ -15,13 +17,14 @@ using kfc::model::Piece;
 using kfc::model::PieceKind;
 using kfc::model::PieceState;
 using kfc::model::Position;
+using kfc::realtime::kSquareTravelMs;
 using kfc::view::buildSnapshot;
 using kfc::view::GameSnapshot;
 
 TEST_CASE("the view snapshot carries board dimensions and the game-over flag") {
     GameEngine engine{Board{8, 8}};
 
-    GameSnapshot snapshot = buildSnapshot(engine.board(), engine.isOver(), std::nullopt);
+    GameSnapshot snapshot = buildSnapshot(engine, std::nullopt);
 
     CHECK(snapshot.boardWidth == 8);
     CHECK(snapshot.boardHeight == 8);
@@ -35,7 +38,7 @@ TEST_CASE("the view snapshot lists each piece in cell coordinates with its state
     board.addPiece(Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}});
     GameEngine engine{std::move(board)};
 
-    GameSnapshot snapshot = buildSnapshot(engine.board(), engine.isOver(), std::nullopt);
+    GameSnapshot snapshot = buildSnapshot(engine, std::nullopt);
 
     REQUIRE(snapshot.pieces.size() == 1);
     const auto& piece = snapshot.pieces.front();
@@ -43,13 +46,33 @@ TEST_CASE("the view snapshot lists each piece in cell coordinates with its state
     CHECK(piece.color == Color::kWhite);
     CHECK(piece.cell == Position{4, 4});
     CHECK(piece.state == PieceState::kIdle);
+    CHECK_FALSE(piece.movingTo.has_value());
+    CHECK(piece.progress == doctest::Approx(0.0));
 }
 
 TEST_CASE("the view snapshot passes through the selected cell from the GUI") {
     GameEngine engine{Board{8, 8}};
 
-    GameSnapshot snapshot = buildSnapshot(engine.board(), engine.isOver(), Position{2, 3});
+    GameSnapshot snapshot = buildSnapshot(engine, Position{2, 3});
 
     REQUIRE(snapshot.selectedCell.has_value());
     CHECK(*snapshot.selectedCell == Position{2, 3});
+}
+
+TEST_CASE("a moving piece exposes its destination and how far along it is") {
+    Board board{8, 8};
+    board.addPiece(Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}});
+    GameEngine engine{std::move(board)};
+    engine.requestMove(Position{4, 4}, Position{4, 6});
+
+    engine.advance(kSquareTravelMs);
+
+    GameSnapshot snapshot = buildSnapshot(engine, std::nullopt);
+    REQUIRE(snapshot.pieces.size() == 1);
+    const auto& piece = snapshot.pieces.front();
+    CHECK(piece.state == PieceState::kMoving);
+    REQUIRE(piece.movingTo.has_value());
+    CHECK(*piece.movingTo == Position{4, 6});
+    CHECK(piece.progress == doctest::Approx(0.5));
+    CHECK(piece.stateElapsedMs == kSquareTravelMs);
 }
