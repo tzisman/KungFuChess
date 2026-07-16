@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <sstream>
+#include <string>
 
 #include "model/piece.hpp"
 
@@ -46,4 +47,17 @@ TEST_CASE("a piece has a readable representation for assertion failures") {
     CHECK(os.str() ==
           "Piece(id=7, color=White, kind=Knight, "
           "cell=Position(row=0, col=1), state=Idle)");
+}
+
+TEST_CASE("a colour has a name") {
+    CHECK(std::string{kfc::model::nameOf(Color::kWhite)} == "White");
+    CHECK(std::string{kfc::model::nameOf(Color::kBlack)} == "Black");
+}
+
+// The name and the printed form are one definition, so a colour cannot be
+// called one thing on screen and another in a diagnostic.
+TEST_CASE("a printed colour reads as the name it is given") {
+    std::ostringstream os;
+    os << Color::kBlack;
+    CHECK(os.str() == kfc::model::nameOf(Color::kBlack));
 }

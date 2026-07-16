@@ -3,17 +3,28 @@
 #include <ostream>
 
 namespace kfc::model {
+namespace {
+
+constexpr char kWhiteName[] = "White";
+constexpr char kBlackName[] = "Black";
+constexpr char kUnknownName[] = "?";
+
+}  // namespace
 
 Piece::Piece(PieceId id, Color color, PieceKind kind, Position cell,
              PieceState state)
     : id_(id), color_(color), kind_(kind), cell_(cell), state_(state) {}
 
-std::ostream& operator<<(std::ostream& os, Color color) {
+const char* nameOf(Color color) {
     switch (color) {
-        case Color::kWhite: return os << "White";
-        case Color::kBlack: return os << "Black";
+        case Color::kWhite: return kWhiteName;
+        case Color::kBlack: return kBlackName;
     }
-    return os << "?";
+    return kUnknownName;
+}
+
+std::ostream& operator<<(std::ostream& os, Color color) {
+    return os << nameOf(color);
 }
 
 std::ostream& operator<<(std::ostream& os, PieceKind kind) {

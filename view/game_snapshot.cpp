@@ -1,5 +1,6 @@
 #include "view/game_snapshot.hpp"
 
+#include "io/move_notation.hpp"
 #include "model/board.hpp"
 #include "realtime/real_time_arbiter.hpp"
 
@@ -51,16 +52,45 @@ std::vector<model::Position> collectMoveTargets(
     return {destinations.begin(), destinations.end()};
 }
 
+// Wording the log is this seam's job: the log keeps records, the renderer draws
+// strings, and the turn from one into the other happens here and only here.
+std::vector<MoveLine> wordMoves(const std::vector<product::MoveRecord>& records,
+                                int boardHeight) {
+    std::vector<MoveLine> lines;
+    lines.reserve(records.size());
+    for (const product::MoveRecord& record : records) {
+        lines.push_back({io::clockText(record.atMs),
+                         io::notationOf(record, boardHeight)});
+    }
+    return lines;
+}
+
+std::vector<PlayerView> collectPlayers(const engine::GameEngine& engine,
+                                       const product::ScoreBoard& scores,
+                                       const product::MoveLog& log) {
+    std::vector<PlayerView> players;
+    players.reserve(model::kAllColors.size());
+    for (model::Color color : model::kAllColors) {
+        players.push_back({color, model::nameOf(color), scores.scoreOf(color),
+                           wordMoves(log.movesOf(color),
+                                     engine.board().height())});
+    }
+    return players;
+}
+
 }
 
 GameSnapshot buildSnapshot(const engine::GameEngine& engine,
-                           const std::optional<model::Position>& selection) {
+                           const std::optional<model::Position>& selection,
+                           const product::ScoreBoard& scores,
+                           const product::MoveLog& log) {
     return {engine.board().width(),
             engine.board().height(),
             collectPieces(engine),
             selection,
             collectMoveTargets(engine, selection),
-            engine.isOver()};
+            engine.isOver(),
+            collectPlayers(engine, scores, log)};
 }
 
 }

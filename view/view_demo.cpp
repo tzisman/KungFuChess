@@ -16,9 +16,12 @@
 #include "io/piece_config.hpp"
 #include "model/board.hpp"
 #include "model/piece.hpp"
+#include "product/move_log.hpp"
+#include "product/score_board.hpp"
 #include "realtime/motion.hpp"
 #include "view/board_geometry.hpp"
 #include "view/game_snapshot.hpp"
+#include "view/panel_layout.hpp"
 #include "view/renderer.hpp"
 #include "view/sprite_library.hpp"
 #include "view/window.hpp"
@@ -102,23 +105,31 @@ int main() {
         }
 
         kfc::io::ParsedInput parsed = kfc::io::parseInput(startBoard);
+
+        // Declared before the engine so they outlive it.
+        kfc::product::ScoreBoard scores;
+        kfc::product::MoveLog moveLog;
+
         kfc::engine::GameEngine engine{std::move(parsed.board),
                                        loadMotionProfiles(kPiecesRoot)};
+        engine.addObserver(scores);
+        engine.addObserver(moveLog);
         const kfc::model::Board& board = engine.board();
 
-        // The geometry is measured from the board image scaled to the display
-        // size, keeping its aspect ratio, so a different board picture or a
-        // different size needs no code change anywhere else.
+       
         Img boardImage;
         boardImage.read(kBoardImagePath, {kBoardDisplaySize, kBoardDisplaySize},
                         /*keep_aspect=*/true);
-        kfc::view::BoardGeometry geometry{boardImage.get_mat().cols,
-                                          boardImage.get_mat().rows,
-                                          board.width(), board.height()};
+        kfc::view::PanelLayout layout{boardImage.get_mat().cols,
+                                      boardImage.get_mat().rows};
+        kfc::view::BoardGeometry geometry{
+            boardImage.get_mat().cols, boardImage.get_mat().rows, board.width(),
+            board.height(), layout.boardOrigin()};
 
         kfc::view::SpriteLibrary sprites{kPiecesRoot, geometry.cellWidth(),
                                          geometry.cellHeight()};
-        kfc::view::Renderer renderer{kBoardImagePath, sprites, geometry};
+        kfc::view::Renderer renderer{kBoardImagePath, sprites, geometry,
+                                     layout};
         kfc::view::Window window{kWindowTitle};
 
         kfc::input::BoardMapper mapper{geometry};
@@ -138,7 +149,8 @@ int main() {
                                                                       start)
                     .count());
             window.show(renderer.render(
-                kfc::view::buildSnapshot(engine, controller.selection()),
+                kfc::view::buildSnapshot(engine, controller.selection(), scores,
+                                         moveLog),
                 nowMs));
 
             if (window.waitKey(kFrameDelayMs) == kQuitKey) break;

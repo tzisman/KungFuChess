@@ -17,9 +17,13 @@ public:
     bool isOver() const { return over_; }
     void markOver() { over_ = true; }
 
+    void advanceClock(int ms) { elapsedMs_ += ms; }
+    int elapsedMs() const { return elapsedMs_; }
+
 private:
     Board board_;
     bool over_ = false;
+    int elapsedMs_ = 0;
 };
 
 }

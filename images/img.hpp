@@ -23,8 +23,21 @@ public:
               int interpolation = cv::INTER_AREA);
     
     /**
+     * Make a blank image of the given size, filled with a single colour. The
+     * image owns its own pixels, so it can be drawn on freely. This is the way
+     * to get a surface that is not the size of any file on disk.
+     *
+     * @param width Width in pixels
+     * @param height Height in pixels
+     * @param color Fill colour (BGRA)
+     * @return Reference to this object for method chaining
+     */
+    Img& blank(int width, int height,
+               const cv::Scalar& color = cv::Scalar(0, 0, 0, 255));
+
+    /**
      * Draw this image onto another image at position (x, y)
-     * 
+     *
      * @param other_img The target image to draw on
      * @param x X coordinate for top-left corner
      * @param y Y coordinate for top-left corner

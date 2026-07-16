@@ -52,6 +52,10 @@ private:
     PieceState state_;
 };
 
+// The single definition of what a colour is called. Shared by every consumer
+// that names a colour, so a display and a diagnostic can never disagree.
+const char* nameOf(Color color);
+
 std::ostream& operator<<(std::ostream& os, Color color);
 std::ostream& operator<<(std::ostream& os, PieceKind kind);
 std::ostream& operator<<(std::ostream& os, PieceState state);

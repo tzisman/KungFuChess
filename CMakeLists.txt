@@ -27,20 +27,25 @@ target_link_libraries(kfc_img PUBLIC ${OpenCV_LIBS})
 add_library(kfc
     model/position.cpp
     model/piece.cpp
+    model/piece_cost.cpp
     model/board.cpp
     rules/piece_rules.cpp
     rules/rule_engine.cpp
     realtime/motion.cpp
     realtime/real_time_arbiter.cpp
     engine/game_engine.cpp
+    product/score_board.cpp
+    product/move_log.cpp
     input/board_mapper.cpp
     input/controller.cpp
     view/board_geometry.cpp
+    view/panel_layout.cpp
     view/game_snapshot.cpp
     io/piece_codec.cpp
     io/piece_config.cpp
     io/board_parser.cpp
     io/board_printer.cpp
+    io/move_notation.cpp
     texttests/script_parser.cpp
     texttests/script_runner.cpp
 )
@@ -70,17 +75,22 @@ add_executable(unit_tests
     tests/test_main.cpp
     tests/unit/test_position.cpp
     tests/unit/test_piece.cpp
+    tests/unit/test_piece_cost.cpp
     tests/unit/test_board.cpp
     tests/unit/test_piece_rules.cpp
     tests/unit/test_rule_engine.cpp
     tests/unit/test_real_time_arbiter.cpp
     tests/unit/test_game_engine.cpp
+    tests/unit/test_score_board.cpp
+    tests/unit/test_move_log.cpp
     tests/unit/test_board_geometry.cpp
+    tests/unit/test_panel_layout.cpp
     tests/unit/test_board_mapper.cpp
     tests/unit/test_controller.cpp
     tests/unit/test_game_snapshot.cpp
     tests/unit/test_board_parser.cpp
     tests/unit/test_board_printer.cpp
+    tests/unit/test_move_notation.cpp
     tests/unit/test_piece_config.cpp
     tests/unit/test_script_parser.cpp
 )

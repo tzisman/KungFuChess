@@ -35,6 +35,15 @@ Img& Img::read(const std::string& path,
     return *this;
 }
 
+Img& Img::blank(int width, int height, const cv::Scalar& color) {
+    if (width <= 0 || height <= 0) {
+        throw std::runtime_error("Image size must be positive.");
+    }
+
+    img = cv::Mat(height, width, CV_8UC4, color);
+    return *this;
+}
+
 void Img::draw_on(Img& other_img, int x, int y) {
     if (img.empty() || other_img.img.empty()) {
         throw std::runtime_error("Both images must be loaded before drawing.");

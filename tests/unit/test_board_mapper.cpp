@@ -59,3 +59,18 @@ TEST_CASE("cells are spread evenly when the image does not divide exactly") {
     CHECK(mapper.toCell(821, 827) == Position{7, 7});
     CHECK_FALSE(mapper.toCell(822, 400).has_value());
 }
+
+TEST_CASE("a click follows the board when the board is drawn away from the corner") {
+    BoardMapper mapper{BoardGeometry{800, 800, 8, 8, kfc::view::Pixel{300, 0}}};
+
+    CHECK(mapper.toCell(350, 50) == Position{0, 0});
+    CHECK(mapper.toCell(450, 50) == Position{0, 1});
+    CHECK(mapper.toCell(1050, 750) == Position{7, 7});
+}
+
+TEST_CASE("a click beside an offset board is outside it") {
+    BoardMapper mapper{BoardGeometry{800, 800, 8, 8, kfc::view::Pixel{300, 0}}};
+
+    CHECK_FALSE(mapper.toCell(50, 50).has_value());
+    CHECK_FALSE(mapper.toCell(1150, 50).has_value());
+}

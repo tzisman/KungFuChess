@@ -29,6 +29,18 @@ constexpr int kGameOverThickness = 4;
 constexpr int kGameOverOutlineThickness = 12;
 constexpr int kTextFont = cv::FONT_HERSHEY_SIMPLEX;
 
+const cv::Scalar kCanvasColour{240, 240, 240, 255};
+const cv::Scalar kPanelTextColour{20, 20, 20, 255};
+constexpr int kPanelTextThickness = 1;
+constexpr char kNameLabel[] = "Name: ";
+constexpr char kScoreLabel[] = "Score: ";
+constexpr char kTimeHeader[] = "Time";
+constexpr char kMoveHeader[] = "Move";
+
+// A capital of the panel font, measured to turn a wanted text height into the
+// scale the font must be drawn at.
+constexpr char kFontHeightSample[] = "0";
+
 bool isResting(model::PieceState state) {
     return state == model::PieceState::kShortResting ||
            state == model::PieceState::kLongResting;
@@ -37,22 +49,87 @@ bool isResting(model::PieceState state) {
 }  // namespace
 
 Renderer::Renderer(const std::string& boardImagePath,
-                   const SpriteLibrary& sprites, BoardGeometry geometry)
-    : sprites_(sprites), geometry_(std::move(geometry)) {
+                   const SpriteLibrary& sprites, BoardGeometry geometry,
+                   PanelLayout layout)
+    : sprites_(sprites),
+      geometry_(std::move(geometry)),
+      layout_(std::move(layout)) {
     background_.read(boardImagePath,
                      {geometry_.imageWidth(), geometry_.imageHeight()});
 }
 
+// The board is laid onto the canvas where the geometry says it sits, and every
+// other measurement follows from that same geometry, so nothing here needs to
+// know that anything is drawn beside the board.
 Img Renderer::render(const GameSnapshot& snapshot, int nowMs) const {
-    Img canvas = background_.clone();
+    Img canvas;
+    canvas.blank(layout_.canvasWidth(), layout_.canvasHeight(), kCanvasColour);
+
+    Img board = background_.clone();
+    board.draw_on(canvas, geometry_.origin().x, geometry_.origin().y);
+
     drawMoveTargets(canvas, snapshot.moveTargets);
     for (const PieceView& piece : snapshot.pieces) {
         drawPiece(canvas, piece, nowMs);
         if (isResting(piece.state)) drawRestBar(canvas, piece);
     }
     if (snapshot.selectedCell) drawSelection(canvas, *snapshot.selectedCell);
+    drawPanels(canvas, snapshot.players);
     if (snapshot.gameOver) drawGameOver(canvas);
     return canvas;
+}
+
+double Renderer::fontScale() const {
+    int baseline = 0;
+    cv::Size unit = cv::getTextSize(kFontHeightSample, kTextFont, 1.0,
+                                    kPanelTextThickness, &baseline);
+    return static_cast<double>(layout_.textHeight()) / unit.height;
+}
+
+void Renderer::drawLine(Img& canvas, const std::string& text, Pixel at) const {
+    canvas.put_text(text, at.x, at.y, fontScale(), kPanelTextColour,
+                    kPanelTextThickness);
+}
+
+void Renderer::drawPanels(Img& canvas,
+                          const std::vector<PlayerView>& players) const {
+    for (const PlayerView& player : players) {
+        drawPanel(canvas, player,
+                  player.color == model::Color::kBlack
+                      ? layout_.leftPanelOrigin()
+                      : layout_.rightPanelOrigin());
+    }
+}
+
+void Renderer::drawPanel(Img& canvas, const PlayerView& player,
+                         Pixel at) const {
+    int timeX = at.x + layout_.timeColumnX();
+    drawLine(canvas, std::string(kNameLabel) + player.name,
+             {timeX, at.y + layout_.lineY(layout_.nameLine())});
+    drawLine(canvas, std::string(kScoreLabel) + std::to_string(player.score),
+             {timeX, at.y + layout_.lineY(layout_.scoreLine())});
+    drawLine(canvas, kTimeHeader,
+             {timeX, at.y + layout_.lineY(layout_.headerLine())});
+    drawLine(canvas, kMoveHeader,
+             {at.x + layout_.moveColumnX(),
+              at.y + layout_.lineY(layout_.headerLine())});
+    drawMoveTable(canvas, player.moves, at);
+}
+
+// Only the newest actions fit once a game runs long, so the table shows the
+// tail of the log rather than its head.
+void Renderer::drawMoveTable(Img& canvas, const std::vector<MoveLine>& moves,
+                             Pixel at) const {
+    int visible = std::min(static_cast<int>(moves.size()),
+                           layout_.maxVisibleMoves());
+    int first = static_cast<int>(moves.size()) - visible;
+
+    for (int i = 0; i < visible; ++i) {
+        const MoveLine& line = moves[first + i];
+        int y = at.y + layout_.lineY(layout_.firstMoveLine() + i);
+        drawLine(canvas, line.time, {at.x + layout_.timeColumnX(), y});
+        drawLine(canvas, line.move, {at.x + layout_.moveColumnX(), y});
+    }
 }
 
 Animation Renderer::animationFor(model::PieceState state) {
@@ -180,7 +257,9 @@ void Renderer::drawSelection(Img& canvas, model::Position cell) const {
 }
 
 // Scaled to span most of the board whatever size it is drawn at, and outlined
-// so it stays readable over both the light and the dark squares.
+// so it stays readable over both the light and the dark squares. It is centred
+// on the board rather than on the canvas, so the panels beside it do not push
+// it off the game it is announcing the end of.
 void Renderer::drawGameOver(Img& canvas) const {
     int baseline = 0;
     cv::Size unscaled =
@@ -191,8 +270,8 @@ void Renderer::drawGameOver(Img& canvas) const {
 
     cv::Size text = cv::getTextSize(kGameOverText, kTextFont, scale,
                                     kGameOverThickness, &baseline);
-    int x = (geometry_.imageWidth() - text.width) / 2;
-    int y = (geometry_.imageHeight() + text.height) / 2;
+    int x = geometry_.origin().x + (geometry_.imageWidth() - text.width) / 2;
+    int y = geometry_.origin().y + (geometry_.imageHeight() + text.height) / 2;
 
     canvas.put_text(kGameOverText, x, y, scale, kGameOverOutlineColour,
                     kGameOverOutlineThickness);

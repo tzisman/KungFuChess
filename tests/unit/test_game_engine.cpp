@@ -1,12 +1,20 @@
 #include <doctest/doctest.h>
 
+#include <vector>
+
 #include "engine/game_engine.hpp"
+#include "engine/game_observer.hpp"
 #include "model/board.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"
 #include "realtime/motion.hpp"
 
+using kfc::engine::ActionEvent;
+using kfc::engine::ActionKind;
+using kfc::engine::CaptureEvent;
 using kfc::engine::GameEngine;
+using kfc::engine::GameObserver;
+using kfc::engine::GameOverEvent;
 using kfc::engine::MoveResult;
 using kfc::model::Board;
 using kfc::model::Color;
@@ -25,6 +33,19 @@ Board boardWith(std::initializer_list<Piece> pieces) {
     }
     return board;
 }
+
+// Stands in for anything watching the game, and remembers what it was told so
+// the telling itself can be checked.
+class RecordingObserver : public GameObserver {
+public:
+    void onAction(const ActionEvent& event) override { actions.push_back(event); }
+    void onCapture(const CaptureEvent& event) override { captures.push_back(event); }
+    void onGameOver(const GameOverEvent& event) override { overs.push_back(event); }
+
+    std::vector<ActionEvent> actions;
+    std::vector<CaptureEvent> captures;
+    std::vector<GameOverEvent> overs;
+};
 
 }
 
@@ -215,4 +236,145 @@ TEST_CASE("a resting piece offers no destinations to highlight") {
     engine.advance(kSquareTravelMs);
 
     CHECK(engine.legalDestinationsFrom(Position{4, 5}).empty());
+}
+
+TEST_CASE("an accepted move is reported to whoever is watching") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    RecordingObserver observer;
+    engine.addObserver(observer);
+
+    engine.requestMove(Position{4, 4}, Position{4, 7});
+
+    REQUIRE(observer.actions.size() == 1);
+    CHECK(observer.actions[0].color == Color::kWhite);
+    CHECK(observer.actions[0].kind == PieceKind::kRook);
+    CHECK(observer.actions[0].from == Position{4, 4});
+    CHECK(observer.actions[0].to == Position{4, 7});
+    CHECK(observer.actions[0].action == ActionKind::kMove);
+}
+
+TEST_CASE("a rejected move is reported to nobody") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    RecordingObserver observer;
+    engine.addObserver(observer);
+
+    engine.requestMove(Position{4, 4}, Position{5, 5});
+
+    CHECK(observer.actions.empty());
+}
+
+TEST_CASE("an accepted jump is reported as a jump that goes nowhere") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    RecordingObserver observer;
+    engine.addObserver(observer);
+
+    engine.requestJump(Position{4, 4});
+
+    REQUIRE(observer.actions.size() == 1);
+    CHECK(observer.actions[0].action == ActionKind::kJump);
+    CHECK(observer.actions[0].from == Position{4, 4});
+    CHECK(observer.actions[0].to == Position{4, 4});
+}
+
+TEST_CASE("an action is stamped with the time on the game clock") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    RecordingObserver observer;
+    engine.addObserver(observer);
+
+    engine.advance(kSquareTravelMs);
+    engine.requestMove(Position{4, 4}, Position{4, 7});
+
+    REQUIRE(observer.actions.size() == 1);
+    CHECK(observer.actions[0].atMs == kSquareTravelMs);
+}
+
+TEST_CASE("a capture names the victim and the piece that took it") {
+    GameEngine engine{boardWith({
+        Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}},
+        Piece{2, Color::kBlack, PieceKind::kQueen, Position{4, 6}},
+    })};
+    RecordingObserver observer;
+    engine.addObserver(observer);
+    engine.requestMove(Position{4, 4}, Position{4, 6});
+
+    engine.advance(2 * kSquareTravelMs);
+
+    REQUIRE(observer.captures.size() == 1);
+    CHECK(observer.captures[0].victim.kind() == PieceKind::kQueen);
+    CHECK(observer.captures[0].victim.color() == Color::kBlack);
+    CHECK(observer.captures[0].capturedBy == Color::kWhite);
+}
+
+TEST_CASE("a move onto an empty square captures nothing") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    RecordingObserver observer;
+    engine.addObserver(observer);
+    engine.requestMove(Position{4, 4}, Position{4, 7});
+
+    engine.advance(3 * kSquareTravelMs);
+
+    CHECK(observer.captures.empty());
+}
+
+// The win must not swallow the capture that won it: a scoreboard learns of the
+// king the same way it learns of any other piece.
+TEST_CASE("taking the king is reported as a capture before the game is called") {
+    GameEngine engine{boardWith({
+        Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}},
+        Piece{2, Color::kBlack, PieceKind::kKing, Position{4, 6}},
+    })};
+    RecordingObserver observer;
+    engine.addObserver(observer);
+    engine.requestMove(Position{4, 4}, Position{4, 6});
+
+    engine.advance(2 * kSquareTravelMs);
+
+    REQUIRE(observer.captures.size() == 1);
+    CHECK(observer.captures[0].victim.kind() == PieceKind::kKing);
+    REQUIRE(observer.overs.size() == 1);
+    CHECK(observer.overs[0].winner == Color::kWhite);
+}
+
+TEST_CASE("a landing jump that takes the king names the jumper as the winner") {
+    GameEngine engine{boardWith({
+        Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}},
+        Piece{2, Color::kBlack, PieceKind::kKing, Position{4, 5}},
+    })};
+    RecordingObserver observer;
+    engine.addObserver(observer);
+    engine.requestJump(Position{4, 4});
+    engine.requestMove(Position{4, 5}, Position{4, 4});
+
+    engine.advance(kSquareTravelMs);
+
+    REQUIRE(observer.captures.size() == 1);
+    CHECK(observer.captures[0].victim.kind() == PieceKind::kKing);
+    CHECK(observer.captures[0].capturedBy == Color::kWhite);
+    REQUIRE(observer.overs.size() == 1);
+    CHECK(observer.overs[0].winner == Color::kWhite);
+}
+
+TEST_CASE("every observer hears the same events") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    RecordingObserver first;
+    RecordingObserver second;
+    engine.addObserver(first);
+    engine.addObserver(second);
+
+    engine.requestMove(Position{4, 4}, Position{4, 7});
+
+    CHECK(first.actions.size() == 1);
+    CHECK(second.actions.size() == 1);
+}
+
+TEST_CASE("a game nobody is watching runs just the same") {
+    GameEngine engine{boardWith({
+        Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}},
+        Piece{2, Color::kBlack, PieceKind::kKing, Position{4, 6}},
+    })};
+
+    engine.requestMove(Position{4, 4}, Position{4, 6});
+    engine.advance(2 * kSquareTravelMs);
+
+    CHECK(engine.isOver());
 }

@@ -70,3 +70,55 @@ TEST_CASE("a board that is not square or not eight by eight still maps") {
     CHECK(geometry.topLeftOf(Position{1, 2}).x == 200);
     CHECK(geometry.topLeftOf(Position{1, 2}).y == 100);
 }
+
+TEST_CASE("a board drawn at the corner starts there by default") {
+    BoardGeometry geometry{800, 800, 8, 8};
+
+    CHECK(geometry.origin().x == 0);
+    CHECK(geometry.origin().y == 0);
+}
+
+TEST_CASE("an offset board is drawn from its origin") {
+    BoardGeometry geometry{800, 800, 8, 8, kfc::view::Pixel{300, 20}};
+
+    CHECK(geometry.topLeftOf(Position{0, 0}).x == 300);
+    CHECK(geometry.topLeftOf(Position{0, 0}).y == 20);
+    CHECK(geometry.topLeftOf(Position{1, 2}).x == 500);
+    CHECK(geometry.topLeftOf(Position{1, 2}).y == 120);
+}
+
+// Drawing and clicking must agree about where a square is, or a board pushed
+// aside to make room for anything else would take clicks meant for its
+// neighbour.
+TEST_CASE("a click on an offset board lands on the square that was drawn there") {
+    BoardGeometry geometry{800, 800, 8, 8, kfc::view::Pixel{300, 20}};
+
+    CHECK(geometry.cellAt(300, 20) == Position{0, 0});
+    CHECK(geometry.cellAt(1099, 819) == Position{7, 7});
+    CHECK(geometry.cellAt(550, 270) == Position{2, 2});
+}
+
+TEST_CASE("a pixel beside an offset board belongs to no cell") {
+    BoardGeometry geometry{800, 800, 8, 8, kfc::view::Pixel{300, 20}};
+
+    CHECK_FALSE(geometry.cellAt(299, 400).has_value());
+    CHECK_FALSE(geometry.cellAt(1100, 400).has_value());
+    CHECK_FALSE(geometry.cellAt(400, 19).has_value());
+    CHECK_FALSE(geometry.cellAt(400, 820).has_value());
+    CHECK_FALSE(geometry.cellAt(0, 0).has_value());
+}
+
+TEST_CASE("every cell of an offset board maps back to itself") {
+    BoardGeometry geometry{822, 828, 8, 8, kfc::view::Pixel{345, 7}};
+
+    for (int row = 0; row < 8; ++row) {
+        for (int col = 0; col < 8; ++col) {
+            Position cell{row, col};
+            kfc::view::Pixel topLeft = geometry.topLeftOf(cell);
+
+            REQUIRE(geometry.cellAt(topLeft.x, topLeft.y) == cell);
+            REQUIRE(geometry.cellAt(topLeft.x + geometry.cellWidth() / 2,
+                                    topLeft.y + geometry.cellHeight() / 2) == cell);
+        }
+    }
+}
