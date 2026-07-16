@@ -20,10 +20,6 @@ bool isFriendlyDestination(const Board& board, Position to, const Piece& mover) 
     return occupant.has_value() && occupant->color() == mover.color();
 }
 
-bool ruleAllows(const Board& board, const Piece& mover, Position to) {
-    return ruleFor(mover.kind()).legalDestinations(board, mover).count(to) != 0;
-}
-
 MoveValidation invalid(Reason reason) {
     return MoveValidation{false, reason};
 }
@@ -60,11 +56,25 @@ MoveValidation RuleEngine::validate(const Board& board, Position from,
         return invalid(Reason::kFriendlyDestination);
     }
 
-    if (!ruleAllows(board, *mover, to)) {
+    if (legalDestinations(board, from).count(to) == 0) {
         return invalid(Reason::kIllegalPieceMove);
     }
 
     return valid();
+}
+
+Destinations RuleEngine::legalDestinations(const Board& board,
+                                           Position from) const {
+    if (!board.inBounds(from)) {
+        return {};
+    }
+
+    auto mover = board.pieceAt(from);
+    if (!mover.has_value()) {
+        return {};
+    }
+
+    return ruleFor(mover->kind()).legalDestinations(board, *mover);
 }
 
 }

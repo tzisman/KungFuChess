@@ -24,6 +24,7 @@ struct GameSnapshot {
     int boardHeight;
     std::vector<PieceView> pieces;
     std::optional<model::Position> selectedCell;
+    std::vector<model::Position> moveTargets;
     bool gameOver;
 };
 

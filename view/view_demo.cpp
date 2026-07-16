@@ -26,7 +26,7 @@
 namespace {
 
 constexpr char kBoardImagePath[] = "images/board.png";
-constexpr char kPiecesRoot[] = "images/pieces2";
+constexpr char kPiecesRoot[] = "images/pieces3";
 constexpr char kStartBoardPath[] = "boards/start.txt";
 constexpr char kWindowTitle[] = "KungFuChess";
 

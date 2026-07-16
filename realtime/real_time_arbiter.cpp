@@ -12,6 +12,11 @@ double fractionOf(int elapsedMs, int durationMs) {
     return std::min(1.0, static_cast<double>(elapsedMs) / durationMs);
 }
 
+CellProgress progressOf(const Jump& jump) {
+    return {std::nullopt, fractionOf(jump.elapsedMs(), jump.durationMs()),
+            jump.elapsedMs()};
+}
+
 }
 
 RealTimeArbiter::RealTimeArbiter(model::Board& board, MotionProfiles profiles)
@@ -73,9 +78,7 @@ CellProgress RealTimeArbiter::progressAt(model::Position cell) const {
     }
     for (const Jump& jump : airborne_) {
         if (jump.cell() == cell) {
-            return {std::nullopt,
-                    fractionOf(jump.elapsedMs(), jump.durationMs()),
-                    jump.elapsedMs()};
+            return progressOf(jump);
         }
     }
     for (const Cooldown& cooldown : resting_) {
@@ -86,6 +89,15 @@ CellProgress RealTimeArbiter::progressAt(model::Position cell) const {
         }
     }
     return {};
+}
+
+std::vector<LiftedPiece> RealTimeArbiter::liftedPieces() const {
+    std::vector<LiftedPiece> lifted;
+    for (const Jump& jump : airborne_) {
+        if (!jump.isLifted()) continue;
+        lifted.push_back({jump.lifted(), progressOf(jump)});
+    }
+    return lifted;
 }
 
 std::optional<ArrivalReport> RealTimeArbiter::resolveArrival(const Motion& motion) {

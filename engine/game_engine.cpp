@@ -13,7 +13,7 @@ GameEngine::GameEngine(model::Board board, realtime::MotionProfiles profiles)
     : state_(std::move(board)),
       arbiter_(state_.board(), std::move(profiles)) {}
 
-MoveResult GameEngine::requestMove(model::Position from, model::Position to) {
+MoveResult GameEngine::checkMove(model::Position from, model::Position to) const {
     if (state_.isOver()) {
         return {false, kReasonGameOver};
     }
@@ -31,8 +31,25 @@ MoveResult GameEngine::requestMove(model::Position from, model::Position to) {
         return {false, kReasonNotIdle};
     }
 
-    arbiter_.startMotion(from, to);
     return {true, rules::reasonCode(rules::Reason::kOk)};
+}
+
+MoveResult GameEngine::requestMove(model::Position from, model::Position to) {
+    MoveResult result = checkMove(from, to);
+    if (result.isAccepted) {
+        arbiter_.startMotion(from, to);
+    }
+    return result;
+}
+
+rules::Destinations GameEngine::legalDestinationsFrom(model::Position from) const {
+    rules::Destinations accepted;
+    for (model::Position to : ruleEngine_.legalDestinations(state_.board(), from)) {
+        if (checkMove(from, to).isAccepted) {
+            accepted.insert(to);
+        }
+    }
+    return accepted;
 }
 
 MoveResult GameEngine::requestJump(model::Position cell) {
@@ -72,6 +89,10 @@ const model::Board& GameEngine::board() const { return state_.board(); }
 
 realtime::CellProgress GameEngine::progressAt(model::Position cell) const {
     return arbiter_.progressAt(cell);
+}
+
+std::vector<realtime::LiftedPiece> GameEngine::liftedPieces() const {
+    return arbiter_.liftedPieces();
 }
 
 bool GameEngine::isOver() const { return state_.isOver(); }

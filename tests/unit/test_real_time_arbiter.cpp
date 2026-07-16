@@ -272,6 +272,40 @@ TEST_CASE("an enemy arriving mid-jump sits on the cell, airborne piece lifted") 
     CHECK(board.pieceAt(Position{4, 4})->kind() == PieceKind::kPawn);
 }
 
+TEST_CASE("a lifted piece is still reported while it is off the board") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    place(board, Color::kBlack, PieceKind::kPawn, Position{4, 5}, 2);
+    RealTimeArbiter arbiter{board};
+    arbiter.startMotion(Position{4, 5}, Position{4, 4});
+    arbiter.advance(kSquareTravelMs / 2);
+
+    arbiter.startJump(Position{4, 4});
+    CHECK(arbiter.liftedPieces().empty());  // nothing has taken its square yet
+
+    arbiter.advance(kSquareTravelMs / 2);
+
+    std::vector<kfc::realtime::LiftedPiece> lifted = arbiter.liftedPieces();
+    REQUIRE(lifted.size() == 1);
+    CHECK(lifted.front().piece.color() == Color::kWhite);
+    CHECK(lifted.front().piece.kind() == PieceKind::kRook);
+    CHECK(lifted.front().piece.cell() == Position{4, 4});
+    CHECK(lifted.front().piece.state() == PieceState::kAirborne);
+}
+
+TEST_CASE("a piece is no longer reported as lifted once it lands") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    place(board, Color::kBlack, PieceKind::kPawn, Position{4, 5}, 2);
+    RealTimeArbiter arbiter{board};
+    arbiter.startJump(Position{4, 4});
+    arbiter.startMotion(Position{4, 5}, Position{4, 4});
+    arbiter.advance(kJumpDurationMs);
+
+    CHECK(arbiter.liftedPieces().empty());
+    CHECK(board.pieceAt(Position{4, 4})->kind() == PieceKind::kRook);
+}
+
 TEST_CASE("the airborne piece captures the arrived enemy when it lands") {
     Board board{8, 8};
     place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);

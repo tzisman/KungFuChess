@@ -12,6 +12,10 @@ namespace {
 const cv::Scalar kSelectionColour{0, 215, 255, 255};
 constexpr int kSelectionThickness = 3;
 
+const cv::Scalar kMoveTargetColour{0, 215, 255, 255};
+constexpr double kMoveTargetRadiusFraction = 0.16;
+constexpr double kMoveTargetAlpha = 0.55;
+
 const cv::Scalar kRestBarColour{90, 200, 90, 255};
 const cv::Scalar kRestBarTrackColour{40, 40, 40, 255};
 constexpr int kRestBarHeight = 5;
@@ -41,6 +45,7 @@ Renderer::Renderer(const std::string& boardImagePath,
 
 Img Renderer::render(const GameSnapshot& snapshot, int nowMs) const {
     Img canvas = background_.clone();
+    drawMoveTargets(canvas, snapshot.moveTargets);
     for (const PieceView& piece : snapshot.pieces) {
         drawPiece(canvas, piece, nowMs);
         if (isResting(piece.state)) drawRestBar(canvas, piece);
@@ -101,8 +106,11 @@ Pixel Renderer::pixelOf(const PieceView& piece) const {
     return at;
 }
 
-// Looping animations page on the shared display clock; one-shot animations
-// page on how long the piece has been in its state, holding the last frame.
+// Looping animations page on the shared display clock at their configured
+// rate. A one-shot animation instead plays once across the whole state, so it
+// is paced by how far through the piece reports itself to be: the state's
+// duration is the rules' to decide, and the animation stretches to fill it
+// rather than finishing early and freezing on its last frame.
 int Renderer::frameIndex(const PieceView& piece, Animation animation,
                          int frameCount, int nowMs) const {
     const AnimationSpec& spec =
@@ -111,8 +119,7 @@ int Renderer::frameIndex(const PieceView& piece, Animation animation,
         return static_cast<int>(nowMs * spec.framesPerSec / 1000.0) %
                frameCount;
     }
-    int frame =
-        static_cast<int>(piece.stateElapsedMs * spec.framesPerSec / 1000.0);
+    int frame = static_cast<int>(piece.progress * frameCount);
     return std::min(frame, frameCount - 1);
 }
 
@@ -134,6 +141,30 @@ void Renderer::drawRestBar(Img& canvas, const PieceView& piece) const {
         cv::rectangle(pixels, cv::Rect(x, y, left, kRestBarHeight),
                       kRestBarColour, cv::FILLED);
     }
+}
+
+// Drawn onto a copy that is then blended back, so the dots read as translucent
+// over whatever square they land on.
+void Renderer::drawMoveTargets(
+    Img& canvas, const std::vector<model::Position>& cells) const {
+    if (cells.empty()) return;
+
+    cv::Mat pixels = canvas.get_mat();
+    cv::Mat overlay = pixels.clone();
+    int radius = static_cast<int>(
+        std::min(geometry_.cellWidth(), geometry_.cellHeight()) *
+        kMoveTargetRadiusFraction);
+
+    for (model::Position cell : cells) {
+        Pixel at = geometry_.topLeftOf(cell);
+        cv::Point centre{at.x + geometry_.cellWidth() / 2,
+                         at.y + geometry_.cellHeight() / 2};
+        cv::circle(overlay, centre, radius, kMoveTargetColour, cv::FILLED,
+                   cv::LINE_AA);
+    }
+
+    cv::addWeighted(overlay, kMoveTargetAlpha, pixels, 1.0 - kMoveTargetAlpha,
+                    0.0, pixels);
 }
 
 // Img can compose images but not draw shapes, so the outline is drawn straight

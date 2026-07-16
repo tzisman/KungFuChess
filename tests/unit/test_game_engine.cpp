@@ -187,3 +187,32 @@ TEST_CASE("an airborne piece capturing an arriving king ends the game") {
     CHECK(engine.isOver());
     CHECK(engine.board().pieceAt(Position{4, 4})->kind() == PieceKind::kRook);
 }
+
+TEST_CASE("the engine offers exactly the destinations it would accept a move to") {
+    GameEngine engine{boardWith({
+        Piece{1, Color::kWhite, PieceKind::kKing, Position{4, 4}},
+        Piece{2, Color::kWhite, PieceKind::kRook, Position{4, 5}},
+        Piece{3, Color::kBlack, PieceKind::kRook, Position{3, 4}},
+    })};
+
+    auto destinations = engine.legalDestinationsFrom(Position{4, 4});
+
+    CHECK(destinations.count(Position{3, 4}) == 1);
+    CHECK(destinations.count(Position{5, 4}) == 1);
+    CHECK(destinations.count(Position{4, 5}) == 0);
+    CHECK(destinations.count(Position{4, 6}) == 0);
+}
+
+TEST_CASE("an empty cell offers no destinations") {
+    GameEngine engine{Board{8, 8}};
+
+    CHECK(engine.legalDestinationsFrom(Position{4, 4}).empty());
+}
+
+TEST_CASE("a resting piece offers no destinations to highlight") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    engine.requestMove(Position{4, 4}, Position{4, 5});
+    engine.advance(kSquareTravelMs);
+
+    CHECK(engine.legalDestinationsFrom(Position{4, 5}).empty());
+}

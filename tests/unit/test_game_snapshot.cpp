@@ -59,6 +59,29 @@ TEST_CASE("the view snapshot passes through the selected cell from the GUI") {
     CHECK(*snapshot.selectedCell == Position{2, 3});
 }
 
+// The jumper is off the board while an enemy holds its square, so the snapshot
+// has to reach past the board to keep it on screen.
+TEST_CASE("an airborne piece stays in the snapshot while an enemy takes its cell") {
+    Board board{8, 8};
+    board.addPiece(Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}});
+    board.addPiece(Piece{2, Color::kBlack, PieceKind::kRook, Position{4, 5}});
+    GameEngine engine{std::move(board)};
+    engine.requestMove(Position{4, 5}, Position{4, 4});
+    engine.advance(kSquareTravelMs / 2);
+    engine.requestJump(Position{4, 4});
+
+    engine.advance(kSquareTravelMs / 2);
+
+    GameSnapshot snapshot = buildSnapshot(engine, std::nullopt);
+    REQUIRE(snapshot.pieces.size() == 2);
+    const auto& airborne = snapshot.pieces.back();
+    CHECK(airborne.color == Color::kWhite);
+    CHECK(airborne.cell == Position{4, 4});
+    CHECK(airborne.state == PieceState::kAirborne);
+    CHECK(snapshot.pieces.front().color == Color::kBlack);
+    CHECK(snapshot.pieces.front().cell == Position{4, 4});
+}
+
 TEST_CASE("a moving piece exposes its destination and how far along it is") {
     Board board{8, 8};
     board.addPiece(Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}});
@@ -75,4 +98,24 @@ TEST_CASE("a moving piece exposes its destination and how far along it is") {
     CHECK(*piece.movingTo == Position{4, 6});
     CHECK(piece.progress == doctest::Approx(0.5));
     CHECK(piece.stateElapsedMs == kSquareTravelMs);
+}
+
+TEST_CASE("the view snapshot carries the selected piece's move targets") {
+    Board board{8, 8};
+    board.addPiece(Piece{1, Color::kWhite, PieceKind::kKing, Position{4, 4}});
+    GameEngine engine{std::move(board)};
+
+    GameSnapshot snapshot = buildSnapshot(engine, Position{4, 4});
+
+    CHECK(snapshot.moveTargets.size() == 8);
+}
+
+TEST_CASE("the view snapshot has no move targets when nothing is selected") {
+    Board board{8, 8};
+    board.addPiece(Piece{1, Color::kWhite, PieceKind::kKing, Position{4, 4}});
+    GameEngine engine{std::move(board)};
+
+    GameSnapshot snapshot = buildSnapshot(engine, std::nullopt);
+
+    CHECK(snapshot.moveTargets.empty());
 }

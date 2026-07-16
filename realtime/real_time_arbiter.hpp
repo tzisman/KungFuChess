@@ -28,6 +28,14 @@ struct CellProgress {
     int stateElapsedMs = 0;
 };
 
+// A piece that is airborne over a cell an enemy has since taken. The board
+// holds one piece per cell, so it is off the board until it lands; anything
+// that shows the game still has to account for it.
+struct LiftedPiece {
+    model::Piece piece;
+    CellProgress progress;
+};
+
 class RealTimeArbiter {
 public:
     explicit RealTimeArbiter(model::Board& board, MotionProfiles profiles = {});
@@ -39,6 +47,7 @@ public:
     std::vector<ArrivalReport> advance(int deltaMs);
 
     CellProgress progressAt(model::Position cell) const;
+    std::vector<LiftedPiece> liftedPieces() const;
 
 private:
     std::optional<ArrivalReport> resolveArrival(const Motion& motion);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "model/board.hpp"
 #include "model/game_state.hpp"
@@ -32,11 +33,16 @@ public:
     MoveResult requestJump(model::Position cell);
     void advance(int ms);
 
+    rules::Destinations legalDestinationsFrom(model::Position from) const;
+
     const model::Board& board() const;
     realtime::CellProgress progressAt(model::Position cell) const;
+    std::vector<realtime::LiftedPiece> liftedPieces() const;
     bool isOver() const;
 
 private:
+    MoveResult checkMove(model::Position from, model::Position to) const;
+
     model::GameState state_;
     rules::RuleEngine ruleEngine_;
     realtime::RealTimeArbiter arbiter_;
