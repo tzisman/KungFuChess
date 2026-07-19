@@ -26,4 +26,8 @@ std::string encodeCell(const std::optional<model::Piece>& cell);
 char kindLetter(model::PieceKind kind);
 char colorLetter(model::Color color);
 
+// The inverse of colorLetter, for any consumer that decodes a colour from the
+// wire or from text. Returns nullopt for an unknown letter.
+std::optional<model::Color> colorFromLetter(char letter);
+
 }

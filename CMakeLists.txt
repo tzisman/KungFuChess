@@ -78,6 +78,15 @@ add_library(kfc
 target_include_directories(kfc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(kfc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 
+# Wire protocol shared by server and client: the message types plus their JSON
+# encoding. It depends only on the logic library and the vendored JSON header;
+# it knows nothing of sockets (net) or display (view), so both sides link it.
+add_library(kfc_protocol
+    protocol/json_codec.cpp
+)
+target_link_libraries(kfc_protocol PUBLIC kfc)
+target_include_directories(kfc_protocol PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+
 # Composition root: reads a VPL script on stdin and prints board output.
 add_executable(kungfu_chess main.cpp)
 target_link_libraries(kungfu_chess PRIVATE kfc)
@@ -123,7 +132,8 @@ add_executable(unit_tests
     tests/unit/test_move_notation.cpp
     tests/unit/test_piece_config.cpp
     tests/unit/test_script_parser.cpp
+    tests/unit/test_protocol.cpp
 )
-target_link_libraries(unit_tests PRIVATE doctest kfc)
+target_link_libraries(unit_tests PRIVATE doctest kfc kfc_protocol)
 
 add_test(NAME unit_tests COMMAND unit_tests)

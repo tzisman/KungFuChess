@@ -25,12 +25,6 @@ std::optional<model::PieceKind> kindOf(char letter) {
     return std::nullopt;
 }
 
-std::optional<model::Color> colorOf(char c) {
-    if (c == kWhiteChar) return model::Color::kWhite;
-    if (c == kBlackChar) return model::Color::kBlack;
-    return std::nullopt;
-}
-
 }  // namespace
 
 char kindLetter(model::PieceKind kind) {
@@ -43,13 +37,19 @@ char colorLetter(model::Color color) {
     return color == model::Color::kWhite ? kWhiteChar : kBlackChar;
 }
 
+std::optional<model::Color> colorFromLetter(char letter) {
+    if (letter == kWhiteChar) return model::Color::kWhite;
+    if (letter == kBlackChar) return model::Color::kBlack;
+    return std::nullopt;
+}
+
 bool isEmptyToken(const std::string& token) {
     return token.size() == 1 && token[0] == kEmptyToken;
 }
 
 std::optional<PieceCode> pieceFromToken(const std::string& token) {
     if (token.size() != 2) return std::nullopt;
-    std::optional<model::Color> color = colorOf(token[0]);
+    std::optional<model::Color> color = colorFromLetter(token[0]);
     std::optional<model::PieceKind> kind = kindOf(token[1]);
     if (!color || !kind) return std::nullopt;
     return PieceCode{*color, *kind};
