@@ -32,4 +32,26 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
+// The one implementation of ClientTransport, backed by the same library, again
+// confined to the .cpp via a pimpl.
+class WebsocketppClient : public ClientTransport {
+public:
+    WebsocketppClient();
+    ~WebsocketppClient() override;
+
+    void onOpen(OpenHandler handler) override;
+    void onMessage(MessageHandler handler) override;
+    void onClose(CloseHandler handler) override;
+
+    void connect(const std::string& uri) override;
+    void send(const std::string& message) override;
+
+    void run() override;
+    void stop() override;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
 }

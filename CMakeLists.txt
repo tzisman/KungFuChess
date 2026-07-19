@@ -119,6 +119,11 @@ target_link_libraries(kungfu_chess_gui PRIVATE kfc_view)
 add_executable(kungfu_chess_server main_server.cpp)
 target_link_libraries(kungfu_chess_server PRIVATE kfc_net kfc_common)
 
+# Composition root of the client. For now it only drives the transport; the GUI
+# (kfc_view) and protocol are linked in as later steps flesh it out.
+add_executable(kungfu_chess_client main_client.cpp)
+target_link_libraries(kungfu_chess_client PRIVATE kfc_net kfc_common)
+
 # Unit tests. Each tests/unit/test_<module>.cpp is registered here.
 add_executable(unit_tests
     tests/test_main.cpp

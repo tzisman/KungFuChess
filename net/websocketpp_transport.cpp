@@ -6,12 +6,15 @@
 #include <utility>
 #include <vector>
 
+#include <websocketpp/client.hpp>
 #include <websocketpp/config/asio_no_tls.hpp>
+#include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/server.hpp>
 
 namespace kfc::net {
 namespace {
 using WsServer = websocketpp::server<websocketpp::config::asio>;
+using WsClient = websocketpp::client<websocketpp::config::asio_client>;
 using Hdl = websocketpp::connection_hdl;
 }  // namespace
 
@@ -122,5 +125,67 @@ void WebsocketppServer::stop() {
     }
     impl_->endpoint.stop();
 }
+
+// --- client ---
+
+struct WebsocketppClient::Impl {
+    WsClient endpoint;
+    Hdl connection;
+
+    ClientTransport::OpenHandler onOpen;
+    ClientTransport::MessageHandler onMessage;
+    ClientTransport::CloseHandler onClose;
+};
+
+WebsocketppClient::WebsocketppClient() : impl_(std::make_unique<Impl>()) {}
+WebsocketppClient::~WebsocketppClient() = default;
+
+void WebsocketppClient::onOpen(OpenHandler handler) {
+    impl_->onOpen = std::move(handler);
+}
+void WebsocketppClient::onMessage(MessageHandler handler) {
+    impl_->onMessage = std::move(handler);
+}
+void WebsocketppClient::onClose(CloseHandler handler) {
+    impl_->onClose = std::move(handler);
+}
+
+void WebsocketppClient::send(const std::string& message) {
+    websocketpp::lib::error_code ec;
+    impl_->endpoint.send(impl_->connection, message,
+                         websocketpp::frame::opcode::text, ec);
+}
+
+void WebsocketppClient::connect(const std::string& uri) {
+    impl_->endpoint.clear_access_channels(websocketpp::log::alevel::all);
+    impl_->endpoint.init_asio();
+
+    impl_->endpoint.set_open_handler([this](Hdl) {
+        if (impl_->onOpen) impl_->onOpen();
+    });
+    impl_->endpoint.set_message_handler([this](Hdl, WsClient::message_ptr msg) {
+        if (impl_->onMessage) impl_->onMessage(msg->get_payload());
+    });
+    // A failed handshake and a clean close both mean "no connection" to us.
+    impl_->endpoint.set_close_handler([this](Hdl) {
+        if (impl_->onClose) impl_->onClose();
+    });
+    impl_->endpoint.set_fail_handler([this](Hdl) {
+        if (impl_->onClose) impl_->onClose();
+    });
+
+    websocketpp::lib::error_code ec;
+    WsClient::connection_ptr connection = impl_->endpoint.get_connection(uri, ec);
+    if (ec) {
+        if (impl_->onClose) impl_->onClose();
+        return;
+    }
+    impl_->connection = connection->get_handle();
+    impl_->endpoint.connect(connection);
+}
+
+void WebsocketppClient::run() { impl_->endpoint.run(); }
+
+void WebsocketppClient::stop() { impl_->endpoint.stop(); }
 
 }

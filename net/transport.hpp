@@ -35,4 +35,25 @@ public:
     virtual void stop() = 0;
 };
 
+// The client side of the transport: a single connection to one server. Same
+// callback shape as the server, minus the connection id — there is only one.
+class ClientTransport {
+public:
+    using OpenHandler = std::function<void()>;
+    using MessageHandler = std::function<void(const std::string&)>;
+    using CloseHandler = std::function<void()>;
+
+    virtual ~ClientTransport() = default;
+
+    virtual void onOpen(OpenHandler handler) = 0;
+    virtual void onMessage(MessageHandler handler) = 0;
+    virtual void onClose(CloseHandler handler) = 0;
+
+    virtual void connect(const std::string& uri) = 0;
+    virtual void send(const std::string& message) = 0;
+
+    virtual void run() = 0;
+    virtual void stop() = 0;
+};
+
 }
