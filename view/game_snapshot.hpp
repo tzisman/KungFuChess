@@ -7,20 +7,15 @@
 #include "engine/game_engine.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"
+#include "product/game_state_view.hpp"
 #include "product/move_log.hpp"
 #include "product/score_board.hpp"
 
 namespace kfc::view {
 
-struct PieceView {
-    model::PieceKind kind;
-    model::Color color;
-    model::Position cell;
-    model::PieceState state;
-    std::optional<model::Position> movingTo;
-    double progress = 0.0;
-    int stateElapsedMs = 0;
-};
+// A drawn piece is exactly the read-model's piece: the renderer needs nothing
+// the neutral projection does not already carry.
+using PieceView = product::PieceSnapshot;
 
 // One logged action, already worded for the two columns it is shown in.
 struct MoveLine {

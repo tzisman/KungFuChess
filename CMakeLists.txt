@@ -61,6 +61,7 @@ add_library(kfc
     engine/game_engine.cpp
     product/score_board.cpp
     product/move_log.cpp
+    product/game_state_view.cpp
     input/board_mapper.cpp
     input/controller.cpp
     view/board_geometry.cpp
@@ -111,6 +112,7 @@ add_executable(unit_tests
     tests/unit/test_game_engine.cpp
     tests/unit/test_score_board.cpp
     tests/unit/test_move_log.cpp
+    tests/unit/test_game_state_view.cpp
     tests/unit/test_board_geometry.cpp
     tests/unit/test_panel_layout.cpp
     tests/unit/test_board_mapper.cpp
