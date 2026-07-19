@@ -23,6 +23,30 @@ target_include_directories(kfc_img PUBLIC
 )
 target_link_libraries(kfc_img PUBLIC ${OpenCV_LIBS})
 
+# Networking transport dependency, vendored header-only under third_party/asio
+# and third_party/websocketpp. Quarantined in its own target exactly like OpenCV
+# in kfc_img: only kfc_net's own sources see websocketpp/asio (PRIVATE include +
+# defines), so the pure logic library kfc stays free of any networking dependency
+# and consumers link only against the future net/transport.hpp interface.
+add_library(kfc_net
+    net/net_deps_check.cpp
+)
+target_include_directories(kfc_net
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/asio
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/websocketpp
+)
+# _WEBSOCKETPP_CPP11_THREAD_ is required on MinGW: websocketpp otherwise assumes
+# MinGW lacks std::thread and falls back to Boost. msys2's mingw64 toolchain
+# supports std::thread, so we force the C++11 path and stay Boost-free.
+target_compile_definitions(kfc_net PRIVATE
+    ASIO_STANDALONE _WEBSOCKETPP_CPP11_STL_ _WEBSOCKETPP_CPP11_THREAD_)
+if (WIN32)
+    target_compile_definitions(kfc_net PRIVATE _WIN32_WINNT=0x0601)
+    target_link_libraries(kfc_net PUBLIC ws2_32 wsock32)
+endif()
+
 # All production sources across the layers, shared by the app and the tests.
 add_library(kfc
     model/position.cpp
