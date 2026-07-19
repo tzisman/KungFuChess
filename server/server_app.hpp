@@ -18,10 +18,9 @@ namespace kfc::server {
 // interface, so it can be driven by a fake transport in tests.
 class ServerApp {
 public:
+    // Wires the transport's connection handlers on construction. The composition
+    // root drives listen/run; the game loop runs elsewhere.
     ServerApp(net::ServerTransport& transport, common::Logger& log);
-
-    // Wires the transport, starts listening, and runs the event loop (blocks).
-    void start(std::uint16_t port);
 
 private:
     void onOpen(net::ConnectionId id);

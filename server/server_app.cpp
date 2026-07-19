@@ -17,12 +17,6 @@ ServerApp::ServerApp(net::ServerTransport& transport, common::Logger& log)
     transport_.onClose([this](net::ConnectionId id) { onClose(id); });
 }
 
-void ServerApp::start(std::uint16_t port) {
-    log_.info("listening on port " + std::to_string(port));
-    transport_.listen(port);
-    transport_.run();
-}
-
 void ServerApp::onOpen(net::ConnectionId id) {
     log_.info("connection " + std::to_string(id) + " opened");
 }

@@ -119,6 +119,7 @@ target_link_libraries(kungfu_chess_gui PRIVATE kfc_view)
 # logger, so its logic is unit-testable with a fake transport.
 add_library(kfc_server
     server/server_app.cpp
+    server/game_session.cpp
 )
 target_link_libraries(kfc_server PUBLIC kfc_protocol kfc_common)
 
@@ -160,6 +161,7 @@ add_executable(unit_tests
     tests/unit/test_protocol.cpp
     tests/unit/test_wire_snapshot.cpp
     tests/unit/test_server_app.cpp
+    tests/unit/test_game_session.cpp
 )
 target_link_libraries(unit_tests PRIVATE doctest kfc kfc_protocol kfc_server)
 
