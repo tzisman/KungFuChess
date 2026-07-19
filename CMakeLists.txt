@@ -26,6 +26,7 @@ target_link_libraries(kfc_img PUBLIC ${OpenCV_LIBS})
 # All production sources across the layers, shared by the app and the tests.
 add_library(kfc
     model/position.cpp
+    model/geometry.cpp
     model/piece.cpp
     model/piece_cost.cpp
     model/board.cpp

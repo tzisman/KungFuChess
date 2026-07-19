@@ -111,16 +111,17 @@ TEST_CASE("a moving piece exposes its destination and how far along it is") {
     GameEngine engine{std::move(board)};
     engine.requestMove(Position{4, 4}, Position{4, 6});
 
-    engine.advance(kSquareTravelMs);
+    engine.advance(3 * kSquareTravelMs / 2);
 
     GameSnapshot snapshot = snapshotOf(engine, std::nullopt);
     REQUIRE(snapshot.pieces.size() == 1);
     const auto& piece = snapshot.pieces.front();
     CHECK(piece.state == PieceState::kMoving);
+    CHECK(piece.cell == Position{4, 5});
     REQUIRE(piece.movingTo.has_value());
     CHECK(*piece.movingTo == Position{4, 6});
     CHECK(piece.progress == doctest::Approx(0.5));
-    CHECK(piece.stateElapsedMs == kSquareTravelMs);
+    CHECK(piece.stateElapsedMs == kSquareTravelMs / 2);
 }
 
 TEST_CASE("the view snapshot carries the selected piece's move targets") {

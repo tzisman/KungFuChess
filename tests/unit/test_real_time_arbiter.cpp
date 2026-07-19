@@ -15,6 +15,7 @@ using kfc::model::PieceKind;
 using kfc::model::Position;
 using kfc::model::PieceState;
 using kfc::realtime::ArrivalReport;
+using kfc::realtime::buildRoute;
 using kfc::realtime::CellProgress;
 using kfc::realtime::kJumpDurationMs;
 using kfc::realtime::kLongRestMs;
@@ -41,19 +42,37 @@ TEST_CASE("a diagonal move is measured in cell steps, not pixel distance") {
     CHECK(travelDurationMs(Position{0, 0}, Position{3, 3}) == 3 * kSquareTravelMs);
 }
 
-TEST_CASE("the board does not change before the piece arrives") {
+TEST_CASE("the board does not change mid-hop, before the piece reaches the next cell") {
     Board board{8, 8};
     place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
     RealTimeArbiter arbiter{board};
 
     CHECK(arbiter.startMotion(Position{4, 4}, Position{4, 7}));
 
-    std::vector<ArrivalReport> reports = arbiter.advance(kSquareTravelMs);  // 1000 of 3000ms
+    std::vector<ArrivalReport> reports = arbiter.advance(kSquareTravelMs / 2);
 
     CHECK(reports.empty());
     CHECK(arbiter.hasActiveMotion());
     CHECK(board.pieceAt(Position{4, 4}).has_value());
-    CHECK_FALSE(board.pieceAt(Position{4, 7}).has_value());
+    CHECK_FALSE(board.pieceAt(Position{4, 5}).has_value());
+}
+
+TEST_CASE("a sliding piece steps through the cells along its route") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    RealTimeArbiter arbiter{board};
+    arbiter.startMotion(Position{4, 4}, Position{4, 7});
+
+    CHECK(arbiter.advance(kSquareTravelMs).empty());
+    CHECK(board.pieceAt(Position{4, 5}).has_value());
+    CHECK_FALSE(board.pieceAt(Position{4, 4}).has_value());
+
+    CHECK(arbiter.advance(kSquareTravelMs).empty());
+    CHECK(board.pieceAt(Position{4, 6}).has_value());
+
+    REQUIRE(arbiter.advance(kSquareTravelMs).size() == 1);
+    CHECK(board.pieceAt(Position{4, 7}).has_value());
+    CHECK_FALSE(arbiter.hasActiveMotion());
 }
 
 TEST_CASE("the board updates when the piece arrives") {
@@ -100,14 +119,23 @@ TEST_CASE("capturing the king is reported") {
     CHECK(reports[0].kingCaptured);
 }
 
-TEST_CASE("only one motion may be active at a time") {
+TEST_CASE("different pieces may be in motion at the same time") {
     Board board{8, 8};
     place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
     place(board, Color::kWhite, PieceKind::kRook, Position{0, 0}, 2);
     RealTimeArbiter arbiter{board};
 
     CHECK(arbiter.startMotion(Position{4, 4}, Position{4, 7}));
-    CHECK_FALSE(arbiter.startMotion(Position{0, 0}, Position{0, 3}));
+    CHECK(arbiter.startMotion(Position{0, 0}, Position{0, 3}));
+}
+
+TEST_CASE("a piece already in motion cannot be commanded again") {
+    Board board{8, 8};
+    place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
+    RealTimeArbiter arbiter{board};
+
+    CHECK(arbiter.startMotion(Position{4, 4}, Position{4, 7}));
+    CHECK_FALSE(arbiter.startMotion(Position{4, 4}, Position{4, 6}));
 }
 
 TEST_CASE("starting a motion from an empty cell is refused") {
@@ -118,13 +146,13 @@ TEST_CASE("starting a motion from an empty cell is refused") {
 }
 
 TEST_CASE("a motion carries the identity of the piece that started it") {
-    Motion motion{7, Position{4, 4}, Position{4, 7},
-                  travelDurationMs(Position{4, 4}, Position{4, 7})};
+    Motion motion{7, Position{4, 4},
+                  buildRoute(Position{4, 4}, Position{4, 7}, kSquareTravelMs)};
 
     CHECK(motion.pieceId() == 7);
-    CHECK(motion.from() == Position{4, 4});
-    CHECK(motion.to() == Position{4, 7});
-    CHECK(motion.durationMs() == 3 * kSquareTravelMs);
+    CHECK(motion.currentCell() == Position{4, 4});
+    CHECK(motion.destination() == Position{4, 7});
+    CHECK(motion.durationMs() == kSquareTravelMs);
 }
 
 TEST_CASE("a slower profile stretches the travel time of that kind") {
@@ -217,7 +245,7 @@ TEST_CASE("capturing a resting piece leaves the capturer resting") {
     CHECK(board.pieceAt(Position{4, 7})->state() == PieceState::kLongResting);
 }
 
-TEST_CASE("progress mid-motion reports the destination and the fraction covered") {
+TEST_CASE("progress mid-motion reports the next cell and the fraction covered") {
     Board board{8, 8};
     place(board, Color::kWhite, PieceKind::kRook, Position{4, 4}, 1);
     RealTimeArbiter arbiter{board};
@@ -225,11 +253,11 @@ TEST_CASE("progress mid-motion reports the destination and the fraction covered"
 
     arbiter.advance(3 * kSquareTravelMs / 2);
 
-    CellProgress progress = arbiter.progressAt(Position{4, 4});
+    CellProgress progress = arbiter.progressAt(Position{4, 5});
     REQUIRE(progress.movingTo.has_value());
-    CHECK(*progress.movingTo == Position{4, 7});
+    CHECK(*progress.movingTo == Position{4, 6});
     CHECK(progress.progress == doctest::Approx(0.5));
-    CHECK(progress.stateElapsedMs == 3 * kSquareTravelMs / 2);
+    CHECK(progress.stateElapsedMs == kSquareTravelMs / 2);
 }
 
 TEST_CASE("progress of a resting piece has no destination but counts its rest") {

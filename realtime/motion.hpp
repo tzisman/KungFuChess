@@ -2,6 +2,7 @@
 
 #include <map>
 #include <optional>
+#include <vector>
 
 #include "model/piece.hpp"
 #include "model/position.hpp"
@@ -19,6 +20,18 @@ constexpr int kJumpDurationFactor = 4;
 
 int travelDurationMs(model::Position from, model::Position to,
                      int squareTravelMs = kSquareTravelMs);
+
+// One single-cell hop of a route: the cell it lands on and how long it takes.
+struct Step {
+    model::Position cell;
+    int durationMs;
+};
+
+// Decomposes a move from `from` to `to` into the hops a piece travels. A sliding
+// move becomes one hop per cell; a leap (e.g. a knight) stays a single hop that
+// keeps its full travel time.
+std::vector<Step> buildRoute(model::Position from, model::Position to,
+                             int squareTravelMs);
 
 // How fast each kind of piece travels and jumps. Kinds that were never given
 // a timing fall back to the fixed defaults, so a game assembled without any
@@ -40,25 +53,35 @@ private:
 };
 
 
+// A piece travelling a route one hop at a time. It occupies its current cell for
+// the whole of each hop, so a piece caught mid-slide is found on the cell it is
+// leaving, not the one it is heading toward.
 class Motion {
 public:
-    Motion(model::PieceId pieceId, model::Position from, model::Position to,
-           int durationMs);
+    Motion(model::PieceId pieceId, model::Position origin,
+           std::vector<Step> steps);
 
     model::PieceId pieceId() const { return pieceId_; }
-    model::Position from() const { return from_; }
-    model::Position to() const { return to_; }
-    int durationMs() const { return durationMs_; }
+    model::Position currentCell() const { return currentCell_; }
+    model::Position nextCell() const { return steps_[index_].cell; }
+    model::Position destination() const { return steps_.back().cell; }
+    int durationMs() const { return steps_[index_].durationMs; }
     int elapsedMs() const { return elapsedMs_; }
+    double hopProgress() const;
 
     void advance(int deltaMs);
-    bool hasArrived() const { return elapsedMs_ >= durationMs_; }
+    bool hopArrived() const { return elapsedMs_ >= durationMs(); }
+
+    // Completes the current hop: the piece now stands on the hop's cell. Returns
+    // false when that was the last hop (the route is done), true when another hop
+    // remains, carrying any overshoot into it.
+    bool advanceToNextHop();
 
 private:
     model::PieceId pieceId_;
-    model::Position from_;
-    model::Position to_;
-    int durationMs_;
+    model::Position currentCell_;
+    std::vector<Step> steps_;
+    std::size_t index_ = 0;
     int elapsedMs_ = 0;
 };
 

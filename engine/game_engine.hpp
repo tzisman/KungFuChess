@@ -13,7 +13,6 @@
 namespace kfc::engine {
 
 inline constexpr char kReasonGameOver[] = "game_over";
-inline constexpr char kReasonMotionInProgress[] = "motion_in_progress";
 inline constexpr char kReasonNoPiece[] = "no_piece";
 inline constexpr char kReasonNotIdle[] = "not_idle";
 

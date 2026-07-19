@@ -2,20 +2,19 @@
 
 #include <vector>
 
+#include "model/geometry.hpp"
+
 namespace kfc::rules {
 
 using model::Board;
 using model::Color;
+using model::Offset;
 using model::Piece;
 using model::PieceKind;
 using model::Position;
+using model::shifted;
 
 namespace {
-
-struct Offset {
-    int dRow;
-    int dCol;
-};
 
 const std::vector<Offset> kRookDirections = {
     {+1, 0}, {-1, 0}, {0, +1}, {0, -1},
@@ -41,10 +40,6 @@ const int kBlackStartRow = 1;
 const int kWhiteStartOffset = 2;
 const int kPawnDoubleStep = 2;
 const PieceKind kPromotionKind = PieceKind::kQueen;
-
-Position shifted(Position cell, const Offset& offset) {
-    return Position{cell.row + offset.dRow, cell.col + offset.dCol};
-}
 
 bool isEmpty(const Board& board, Position cell) {
     return !board.pieceAt(cell).has_value();

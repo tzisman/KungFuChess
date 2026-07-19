@@ -40,10 +40,6 @@ MoveResult GameEngine::checkMove(model::Position from, model::Position to) const
         return {false, kReasonGameOver};
     }
 
-    if (arbiter_.hasActiveMotion()) {
-        return {false, kReasonMotionInProgress};
-    }
-
     rules::MoveValidation validation = ruleEngine_.validate(state_.board(), from, to);
     if (!validation.isValid) {
         return {false, rules::reasonCode(validation.reason)};

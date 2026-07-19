@@ -1,0 +1,15 @@
+Board:
+bR bN bB bQ bK bB bN bR
+bP bP bP bP bP bP bP bP
+. . . . . . . .
+. . . . . . . .
+. . . . . . . .
+. . . . . . . .
+wP wP wP wP wP wP wP wP
+wR wN wB wQ wK wB wN wR
+Commands:
+print board
+click 450 650
+click 450 450
+wait 5000
+print board

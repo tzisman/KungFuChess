@@ -50,7 +50,12 @@ public:
     std::vector<LiftedPiece> liftedPieces() const;
 
 private:
-    std::optional<ArrivalReport> resolveArrival(const Motion& motion);
+    void resolveArrivedHops(std::vector<ArrivalReport>& reports);
+    std::optional<ArrivalReport> resolveHop(model::PieceId pieceId);
+    Motion* earliestArrivedMotion();
+    Motion* motionFor(model::PieceId pieceId);
+    void removeMotion(model::PieceId pieceId);
+    bool hasMotionFor(model::PieceId pieceId) const;
     void landAirborne(int deltaMs, std::vector<ArrivalReport>& reports);
     void startShortRest(model::PieceId pieceId, model::Position cell);
     void startLongRest(model::PieceId pieceId, model::Position cell);

@@ -76,7 +76,7 @@ TEST_CASE("moving from an empty source carries the rule-level reason") {
     CHECK(result.reason == "empty_source");
 }
 
-TEST_CASE("a second move is rejected while a motion is in progress") {
+TEST_CASE("an idle piece may move while another is already in motion") {
     GameEngine engine{boardWith({
         Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}},
         Piece{2, Color::kWhite, PieceKind::kRook, Position{0, 0}},
@@ -85,8 +85,17 @@ TEST_CASE("a second move is rejected while a motion is in progress") {
 
     MoveResult result = engine.requestMove(Position{0, 0}, Position{0, 3});
 
+    CHECK(result.isAccepted);
+}
+
+TEST_CASE("a piece already in motion cannot be commanded again") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    engine.requestMove(Position{4, 4}, Position{4, 7});
+
+    MoveResult result = engine.requestMove(Position{4, 4}, Position{4, 5});
+
     CHECK_FALSE(result.isAccepted);
-    CHECK(result.reason == "motion_in_progress");
+    CHECK(result.reason == "not_idle");
 }
 
 TEST_CASE("a piece that just arrived is resting and cannot move yet") {

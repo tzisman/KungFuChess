@@ -1,7 +1,14 @@
 #include "view/panel_layout.hpp"
 
+#include <cmath>
+
 namespace kfc::view {
 namespace {
+
+int scale(int base, double fraction) {
+    return static_cast<int>(std::lround(base * fraction));
+}
+
 
 constexpr double kPanelWidthFraction = 0.42;
 constexpr int kLinesPerPanel = 24;
@@ -19,7 +26,7 @@ constexpr int kFirstMoveLine = 4;
 PanelLayout::PanelLayout(int boardWidth, int boardHeight)
     : boardWidth_(boardWidth),
       boardHeight_(boardHeight),
-      panelWidth_(static_cast<int>(boardWidth * kPanelWidthFraction)) {}
+      panelWidth_(scale(boardWidth, kPanelWidthFraction)) {}
 
 int PanelLayout::canvasWidth() const { return boardWidth_ + 2 * panelWidth_; }
 
@@ -48,7 +55,7 @@ int PanelLayout::maxVisibleMoves() const {
 int PanelLayout::lineHeight() const { return boardHeight_ / kLinesPerPanel; }
 
 int PanelLayout::textHeight() const {
-    return static_cast<int>(lineHeight() * kTextHeightFraction);
+    return scale(lineHeight(), kTextHeightFraction);
 }
 
 // The baseline a line of text sits on, so line zero clears the panel's top edge
@@ -56,11 +63,11 @@ int PanelLayout::textHeight() const {
 int PanelLayout::lineY(int line) const { return (line + 1) * lineHeight(); }
 
 int PanelLayout::timeColumnX() const {
-    return static_cast<int>(panelWidth_ * kTimeColumnFraction);
+    return scale(panelWidth_, kTimeColumnFraction);
 }
 
 int PanelLayout::moveColumnX() const {
-    return static_cast<int>(panelWidth_ * kMoveColumnFraction);
+    return scale(panelWidth_, kMoveColumnFraction);
 }
 
 }

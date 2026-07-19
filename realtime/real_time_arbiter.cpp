@@ -23,16 +23,13 @@ RealTimeArbiter::RealTimeArbiter(model::Board& board, MotionProfiles profiles)
     : board_(board), profiles_(std::move(profiles)) {}
 
 bool RealTimeArbiter::startMotion(model::Position from, model::Position to) {
-    if (hasActiveMotion()) {
-        return false;
-    }
     std::optional<model::Piece> mover = board_.pieceAt(from);
-    if (!mover) {
+    if (!mover || hasMotionFor(mover->id())) {
         return false;
     }
-    int durationMs =
-        travelDurationMs(from, to, profiles_.squareTravelMs(mover->kind()));
-    active_.emplace_back(mover->id(), from, to, durationMs);
+    active_.emplace_back(
+        mover->id(), from,
+        buildRoute(from, to, profiles_.squareTravelMs(mover->kind())));
     board_.setPieceState(from, model::PieceState::kMoving);
     return true;
 }
@@ -53,27 +50,18 @@ bool RealTimeArbiter::startJump(model::Position cell) {
 std::vector<ArrivalReport> RealTimeArbiter::advance(int deltaMs) {
     std::vector<ArrivalReport> reports;
     tickCooldowns(deltaMs);
-    for (auto it = active_.begin(); it != active_.end();) {
-        it->advance(deltaMs);
-        if (it->hasArrived()) {
-            if (std::optional<ArrivalReport> report = resolveArrival(*it)) {
-                reports.push_back(*report);
-            }
-            it = active_.erase(it);
-        } else {
-            ++it;
-        }
+    for (Motion& motion : active_) {
+        motion.advance(deltaMs);
     }
+    resolveArrivedHops(reports);
     landAirborne(deltaMs, reports);
     return reports;
 }
 
 CellProgress RealTimeArbiter::progressAt(model::Position cell) const {
     for (const Motion& motion : active_) {
-        if (motion.from() == cell) {
-            return {motion.to(),
-                    fractionOf(motion.elapsedMs(), motion.durationMs()),
-                    motion.elapsedMs()};
+        if (motion.currentCell() == cell) {
+            return {motion.nextCell(), motion.hopProgress(), motion.elapsedMs()};
         }
     }
     for (const Jump& jump : airborne_) {
@@ -100,35 +88,106 @@ std::vector<LiftedPiece> RealTimeArbiter::liftedPieces() const {
     return lifted;
 }
 
-std::optional<ArrivalReport> RealTimeArbiter::resolveArrival(const Motion& motion) {
-    model::Position from = motion.from();
-    model::Position to = motion.to();
+// A hop's overshoot past its own duration: the more a piece has run past the
+// finish line, the earlier within the tick it arrived. This orders simultaneous
+// arrivals so the later mover is the one that captures or is turned back.
+int arrivalKey(const Motion& motion) {
+    return motion.elapsedMs() - motion.durationMs();
+}
+
+// The arrival to settle next: the earliest-arrived hop, ties broken by piece id
+// so the resolution order is deterministic.
+Motion* RealTimeArbiter::earliestArrivedMotion() {
+    Motion* earliest = nullptr;
+    for (Motion& motion : active_) {
+        if (!motion.hopArrived()) continue;
+        if (earliest == nullptr || arrivalKey(motion) > arrivalKey(*earliest) ||
+            (arrivalKey(motion) == arrivalKey(*earliest) &&
+             motion.pieceId() < earliest->pieceId())) {
+            earliest = &motion;
+        }
+    }
+    return earliest;
+}
+
+void RealTimeArbiter::resolveArrivedHops(std::vector<ArrivalReport>& reports) {
+    while (Motion* earliest = earliestArrivedMotion()) {
+        if (std::optional<ArrivalReport> report = resolveHop(earliest->pieceId())) {
+            reports.push_back(*report);
+        }
+    }
+}
+
+// Settles one arrived hop against whatever holds the cell it lands on. Different
+// colours mean the arriver takes the square; the same colour turns it back one
+// cell; an empty square lets it move on or, at the route's end, come to rest.
+std::optional<ArrivalReport> RealTimeArbiter::resolveHop(model::PieceId pieceId) {
+    Motion* motion = motionFor(pieceId);
+    model::Position from = motion->currentCell();
+    model::Position to = motion->nextCell();
 
     std::optional<model::Piece> arriver = board_.pieceAt(from);
-    if (!arriver || arriver->id() != motion.pieceId()) {
+    if (!arriver || arriver->id() != pieceId) {
+        removeMotion(pieceId);
         return std::nullopt;
     }
+
     std::optional<model::Piece> occupant = board_.pieceAt(to);
 
-    if (occupant && occupant->state() == model::PieceState::kAirborne &&
-        arriver->color() != occupant->color()) {
-        jumpAt(to)->lift(*occupant);
-        board_.removePiece(to);
-        board_.movePiece(from, to);
-        startLongRest(board_.pieceAt(to)->id(), to);
-        return ArrivalReport{to, std::nullopt, false, true};
+    if (occupant && occupant->color() == arriver->color()) {
+        startLongRest(pieceId, from);
+        removeMotion(pieceId);
+        return std::nullopt;
     }
 
     if (occupant) {
+        if (occupant->state() == model::PieceState::kAirborne) {
+            jumpAt(to)->lift(*occupant);
+            board_.removePiece(to);
+            board_.movePiece(from, to);
+            startLongRest(pieceId, to);
+            removeMotion(pieceId);
+            return ArrivalReport{to, std::nullopt, false, true};
+        }
+        removeMotion(occupant->id());
         board_.removePiece(to);
+        board_.movePiece(from, to);
+        startLongRest(pieceId, to);
+        removeMotion(pieceId);
+        return ArrivalReport{to, occupant,
+                             occupant->kind() == model::PieceKind::kKing, true};
     }
+
     board_.movePiece(from, to);
-    startLongRest(board_.pieceAt(to)->id(), to);
+    if (motion->advanceToNextHop()) {
+        return std::nullopt;
+    }
+    startLongRest(pieceId, to);
+    removeMotion(pieceId);
+    return ArrivalReport{to, std::nullopt, false, true};
+}
 
-    bool kingCaptured =
-        occupant && occupant->kind() == model::PieceKind::kKing;
+Motion* RealTimeArbiter::motionFor(model::PieceId pieceId) {
+    for (Motion& motion : active_) {
+        if (motion.pieceId() == pieceId) return &motion;
+    }
+    return nullptr;
+}
 
-    return ArrivalReport{to, occupant, kingCaptured, true};
+void RealTimeArbiter::removeMotion(model::PieceId pieceId) {
+    for (auto it = active_.begin(); it != active_.end(); ++it) {
+        if (it->pieceId() == pieceId) {
+            active_.erase(it);
+            return;
+        }
+    }
+}
+
+bool RealTimeArbiter::hasMotionFor(model::PieceId pieceId) const {
+    for (const Motion& motion : active_) {
+        if (motion.pieceId() == pieceId) return true;
+    }
+    return false;
 }
 
 void RealTimeArbiter::landAirborne(int deltaMs,
