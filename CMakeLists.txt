@@ -66,9 +66,11 @@ add_library(kfc_view
 )
 target_link_libraries(kfc_view PUBLIC kfc kfc_img)
 
-# Composition root of the GUI: wires the logic, the view and the window.
-add_executable(view_demo view/view_demo.cpp)
-target_link_libraries(view_demo PRIVATE kfc_view)
+# Composition root of the GUI: wires the logic, the view and the window. It
+# lives at the repository root, alongside the text harness's main, so no main()
+# sits inside the display-only view layer.
+add_executable(kungfu_chess_gui main_gui.cpp)
+target_link_libraries(kungfu_chess_gui PRIVATE kfc_view)
 
 # Unit tests. Each tests/unit/test_<module>.cpp is registered here.
 add_executable(unit_tests

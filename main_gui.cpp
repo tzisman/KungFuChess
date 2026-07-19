@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
+#include "app/composition.hpp"
 #include "engine/game_engine.hpp"
 #include "img.hpp"
-#include "input/board_mapper.hpp"
 #include "input/controller.hpp"
 #include "io/board_parser.hpp"
 #include "io/piece_codec.hpp"
@@ -116,7 +116,7 @@ int main() {
         engine.addObserver(moveLog);
         const kfc::model::Board& board = engine.board();
 
-       
+
         Img boardImage;
         boardImage.read(kBoardImagePath, {kBoardDisplaySize, kBoardDisplaySize},
                         /*keep_aspect=*/true);
@@ -132,8 +132,8 @@ int main() {
                                      layout};
         kfc::view::Window window{kWindowTitle};
 
-        kfc::input::BoardMapper mapper{geometry};
-        kfc::input::Controller controller{engine, mapper};
+        kfc::input::Controller controller =
+            kfc::app::makeController(engine, geometry);
 
         Clock::time_point start = Clock::now();
         Clock::time_point last = start;
