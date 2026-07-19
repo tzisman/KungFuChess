@@ -114,10 +114,18 @@ target_link_libraries(kfc_view PUBLIC kfc kfc_img)
 add_executable(kungfu_chess_gui main_gui.cpp)
 target_link_libraries(kungfu_chess_gui PRIVATE kfc_view)
 
-# Composition root of the server: owns the transport and (in later steps) the
-# authoritative game. Links the networking layer, never the display.
+# The authoritative coordination layer. It depends only on the transport
+# interface (not the websocketpp implementation), the shared protocol and the
+# logger, so its logic is unit-testable with a fake transport.
+add_library(kfc_server
+    server/server_app.cpp
+)
+target_link_libraries(kfc_server PUBLIC kfc_protocol kfc_common)
+
+# Composition root of the server: joins the server logic to the concrete
+# websocketpp transport. Links the networking layer, never the display.
 add_executable(kungfu_chess_server main_server.cpp)
-target_link_libraries(kungfu_chess_server PRIVATE kfc_net kfc_common)
+target_link_libraries(kungfu_chess_server PRIVATE kfc_server kfc_net)
 
 # Composition root of the client. For now it only drives the transport; the GUI
 # (kfc_view) and protocol are linked in as later steps flesh it out.
@@ -151,7 +159,8 @@ add_executable(unit_tests
     tests/unit/test_script_parser.cpp
     tests/unit/test_protocol.cpp
     tests/unit/test_wire_snapshot.cpp
+    tests/unit/test_server_app.cpp
 )
-target_link_libraries(unit_tests PRIVATE doctest kfc kfc_protocol)
+target_link_libraries(unit_tests PRIVATE doctest kfc kfc_protocol kfc_server)
 
 add_test(NAME unit_tests COMMAND unit_tests)

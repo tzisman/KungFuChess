@@ -26,11 +26,14 @@ std::string nowText() {
 
 }  // namespace
 
-Logger::Logger(std::string tag) : tag_(std::move(tag)) {}
+Logger::Logger(std::string tag) : Logger(std::move(tag), std::cout) {}
+
+Logger::Logger(std::string tag, std::ostream& out)
+    : tag_(std::move(tag)), out_(out) {}
 
 void Logger::info(const std::string& message) const {
     std::lock_guard<std::mutex> lock(outputMutex());
-    std::cout << nowText() << " [" << tag_ << "] " << message << std::endl;
+    out_ << nowText() << " [" << tag_ << "] " << message << std::endl;
 }
 
 }
