@@ -3,7 +3,8 @@
 #include <map>
 #include <vector>
 
-#include "engine/game_observer.hpp"
+#include "bus/event_bus.hpp"
+#include "engine/game_events.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"
 
@@ -21,9 +22,10 @@ struct MoveRecord {
 // What each player has done, in the order they did it. It keeps the actions as
 // records rather than as text: how a move should read is not the game's
 // business.
-class MoveLog : public engine::GameObserver {
+class MoveLog {
 public:
-    void onAction(const engine::ActionEvent& event) override;
+    void subscribeTo(bus::EventBus& bus);
+    void onAction(const engine::ActionEvent& event);
 
     const std::vector<MoveRecord>& movesOf(model::Color color) const;
 

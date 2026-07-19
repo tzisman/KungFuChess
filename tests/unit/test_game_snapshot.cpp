@@ -163,8 +163,8 @@ TEST_CASE("the view snapshot carries the score a player has earned") {
     GameEngine engine{std::move(board)};
     ScoreBoard scores;
     MoveLog log;
-    engine.addObserver(scores);
-    engine.addObserver(log);
+    scores.subscribeTo(engine.events());
+    log.subscribeTo(engine.events());
 
     engine.requestMove(Position{4, 4}, Position{4, 6});
     engine.advance(2 * kSquareTravelMs);
@@ -182,8 +182,8 @@ TEST_CASE("the view snapshot words each logged action for its player") {
     GameEngine engine{std::move(board)};
     ScoreBoard scores;
     MoveLog log;
-    engine.addObserver(scores);
-    engine.addObserver(log);
+    scores.subscribeTo(engine.events());
+    log.subscribeTo(engine.events());
 
     engine.advance(2314);
     engine.requestMove(Position{6, 4}, Position{4, 4});

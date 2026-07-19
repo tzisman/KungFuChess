@@ -47,13 +47,15 @@ rules/                # Business Logic — the rules of the game
 realtime/             # Business Logic — the real-time / simultaneous mechanics
   motion              # travel time, cooldown, jump durations
   real_time_arbiter   # pending moves/jumps, the clock, arrival resolution
+bus/                  # Business Logic — messaging infrastructure (layer-neutral)
+  event_bus           # generic type-indexed publish/subscribe bus
 engine/               # Business Logic — top-level coordination
   game_engine         # drives state + rules + realtime; the logic entry point
-                      # and the Subject that reports what happened
-  game_observer       # the game's events + the observer interface
+                      # and the Subject that publishes what happened to the bus
+  game_events         # the game's event types (Action/Capture/GameOver)
 product/              # Business Logic — product features built on game events
-  score_board         # observer: each player's score
-  move_log            # observer: each player's actions, as records
+  score_board         # subscriber: each player's score
+  move_log            # subscriber: each player's actions, as records
 input/                # GUI (input side) — no game rules
   board_mapper        # pixel <-> cell mapping (display-coupled)
   controller          # turns raw input into engine commands
@@ -74,15 +76,15 @@ main.cpp              # composition root wiring the layers together
 tests/
   unit/               # Business Logic + seams, each unit tested in isolation
     test_position  test_board  test_piece_rules  test_rule_engine
-    test_real_time_arbiter  test_game_engine  test_board_mapper
+    test_real_time_arbiter  test_event_bus  test_game_engine  test_board_mapper
     test_controller  test_board_parser  test_board_printer
     test_piece_cost  test_score_board  test_move_log  test_move_notation
     test_panel_layout
 ```
 
-Layer mapping: `model` + `rules` + `realtime` + `engine` + `product` are **Business Logic**; `input` + `view` are the **GUI**. `io` is a serialization boundary, not a rules or display layer.
+Layer mapping: `model` + `rules` + `realtime` + `bus` + `engine` + `product` are **Business Logic**; `input` + `view` are the **GUI**. `io` is a serialization boundary, not a rules or display layer.
 
-Product features (score, moves log) observe the engine rather than being called by it: `GameEngine` reports `ActionEvent` / `CaptureEvent` / `GameOverEvent` to a `GameObserver`, and knows nothing of who is listening. A feature that accumulates from game events belongs in `product/` as an observer — never as a hook inside the rules, and never in the GUI.
+Product features (score, moves log) observe the engine rather than being called by it: `GameEngine` publishes `ActionEvent` / `CaptureEvent` / `GameOverEvent` to a generic `EventBus`, and knows nothing of who is listening. Subscribers register through `engine.events()` and each declares what it cares about via its own `subscribeTo(bus)`. A feature that accumulates from game events belongs in `product/` as a subscriber — never as a hook inside the rules, and never in the GUI. The bus is deliberately ignorant of any concrete event type, so it depends on no game layer: this is the seam through which the future Server layer will publish and subscribe without the logic ever hearing of it.
 
 ### Naming conventions
 
@@ -90,7 +92,7 @@ Product features (score, moves log) observe the engine rather than being called 
 - **Types (classes, structs, enums):** `PascalCase`.
 - **Functions & variables:** `camelCase`; private members carry a trailing underscore (`board_`).
 - **Constants / enum values:** `kPascalCase` (e.g. `kSquareTravelMs`).
-- **Namespaces:** `kfc` at the root, one nested namespace per layer (`kfc::model`, `kfc::rules`, `kfc::realtime`, `kfc::engine`, `kfc::product`, `kfc::input`, `kfc::view`, `kfc::io`). Business Logic namespaces must never `#include` from `input`/`view`.
+- **Namespaces:** `kfc` at the root, one nested namespace per layer (`kfc::model`, `kfc::rules`, `kfc::realtime`, `kfc::bus`, `kfc::engine`, `kfc::product`, `kfc::input`, `kfc::view`, `kfc::io`). Business Logic namespaces must never `#include` from `input`/`view`.
 
 ## Code Quality Rules
 

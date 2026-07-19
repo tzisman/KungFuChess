@@ -30,16 +30,4 @@ struct GameOverEvent {
     int atMs;
 };
 
-// Anything that wants to follow the game without the game knowing it exists.
-// Every handler does nothing by default, so an observer overrides only the
-// events it actually cares about.
-class GameObserver {
-public:
-    virtual ~GameObserver() = default;
-
-    virtual void onAction(const ActionEvent&) {}
-    virtual void onCapture(const CaptureEvent&) {}
-    virtual void onGameOver(const GameOverEvent&) {}
-};
-
 }

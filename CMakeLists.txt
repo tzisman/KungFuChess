@@ -83,6 +83,7 @@ add_executable(unit_tests
     tests/unit/test_piece_rules.cpp
     tests/unit/test_rule_engine.cpp
     tests/unit/test_real_time_arbiter.cpp
+    tests/unit/test_event_bus.cpp
     tests/unit/test_game_engine.cpp
     tests/unit/test_score_board.cpp
     tests/unit/test_move_log.cpp

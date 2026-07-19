@@ -13,26 +13,12 @@ GameEngine::GameEngine(model::Board board, realtime::MotionProfiles profiles)
     : state_(std::move(board)),
       arbiter_(state_.board(), std::move(profiles)) {}
 
-void GameEngine::addObserver(GameObserver& observer) {
-    observers_.push_back(&observer);
-}
-
-void GameEngine::notifyAction(const ActionEvent& event) const {
-    for (GameObserver* observer : observers_) observer->onAction(event);
-}
-
-void GameEngine::notifyCapture(const CaptureEvent& event) const {
-    for (GameObserver* observer : observers_) observer->onCapture(event);
-}
-
-void GameEngine::notifyGameOver(const GameOverEvent& event) const {
-    for (GameObserver* observer : observers_) observer->onGameOver(event);
-}
+bus::EventBus& GameEngine::events() { return bus_; }
 
 void GameEngine::announceAction(const model::Piece& actor, model::Position to,
                                 ActionKind action) const {
-    notifyAction({actor.id(), actor.color(), actor.kind(), actor.cell(), to,
-                  action, state_.elapsedMs()});
+    bus_.publish(ActionEvent{actor.id(), actor.color(), actor.kind(),
+                             actor.cell(), to, action, state_.elapsedMs()});
 }
 
 MoveResult GameEngine::checkMove(model::Position from, model::Position to) const {
@@ -101,7 +87,7 @@ void GameEngine::announceCapture(const realtime::ArrivalReport& report) const {
     std::optional<model::Piece> captor = state_.board().pieceAt(report.destination);
     if (!captor) return;
 
-    notifyCapture({*report.captured, captor->color(), state_.elapsedMs()});
+    bus_.publish(CaptureEvent{*report.captured, captor->color(), state_.elapsedMs()});
 }
 
 void GameEngine::endGame(const realtime::ArrivalReport& report) {
@@ -110,7 +96,7 @@ void GameEngine::endGame(const realtime::ArrivalReport& report) {
     std::optional<model::Piece> winner = state_.board().pieceAt(report.destination);
     if (!winner) return;
 
-    notifyGameOver({winner->color(), state_.elapsedMs()});
+    bus_.publish(GameOverEvent{winner->color(), state_.elapsedMs()});
 }
 
 void GameEngine::applyPromotion(const realtime::ArrivalReport& report) {

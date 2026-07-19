@@ -112,8 +112,8 @@ int main() {
 
         kfc::engine::GameEngine engine{std::move(parsed.board),
                                        loadMotionProfiles(kPiecesRoot)};
-        engine.addObserver(scores);
-        engine.addObserver(moveLog);
+        scores.subscribeTo(engine.events());
+        moveLog.subscribeTo(engine.events());
         const kfc::model::Board& board = engine.board();
 
 

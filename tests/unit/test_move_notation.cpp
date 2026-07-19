@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "engine/game_observer.hpp"
+#include "engine/game_events.hpp"
 #include "io/move_notation.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"

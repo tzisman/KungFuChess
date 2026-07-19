@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "engine/game_observer.hpp"
+#include "bus/event_bus.hpp"
+#include "engine/game_events.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"
 #include "product/move_log.hpp"
@@ -76,13 +77,27 @@ TEST_CASE("a jump is logged as a jump, going nowhere") {
     CHECK(record.from == record.to);
 }
 
-TEST_CASE("a log ignores what it is not there to record") {
+TEST_CASE("a subscribed log records the actions the bus delivers") {
+    kfc::bus::EventBus bus;
     MoveLog log;
+    log.subscribeTo(bus);
 
-    log.onCapture({kfc::model::Piece{kAnyId, Color::kBlack, PieceKind::kPawn,
-                                     Position{4, 4}},
-                   Color::kWhite, 100});
-    log.onGameOver({Color::kWhite, 200});
+    bus.publish(moveOf(Color::kWhite, PieceKind::kPawn, Position{6, 4},
+                       Position{4, 4}, 2314));
+
+    REQUIRE(log.movesOf(Color::kWhite).size() == 1);
+    CHECK(log.movesOf(Color::kWhite).front().atMs == 2314);
+}
+
+TEST_CASE("a log ignores what it is not there to record") {
+    kfc::bus::EventBus bus;
+    MoveLog log;
+    log.subscribeTo(bus);
+
+    bus.publish(kfc::engine::CaptureEvent{
+        kfc::model::Piece{kAnyId, Color::kBlack, PieceKind::kPawn, Position{4, 4}},
+        Color::kWhite, 100});
+    bus.publish(kfc::engine::GameOverEvent{Color::kWhite, 200});
 
     CHECK(log.movesOf(Color::kWhite).empty());
     CHECK(log.movesOf(Color::kBlack).empty());

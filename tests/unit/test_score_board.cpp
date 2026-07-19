@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "engine/game_observer.hpp"
+#include "bus/event_bus.hpp"
+#include "engine/game_events.hpp"
 #include "model/piece.hpp"
 #include "model/piece_cost.hpp"
 #include "model/position.hpp"
@@ -55,12 +56,25 @@ TEST_CASE("captures accumulate for each player separately") {
     CHECK(scores.scoreOf(Color::kBlack) == kfc::model::costOf(PieceKind::kKnight));
 }
 
-TEST_CASE("a scoreboard ignores what it is not there to count") {
+TEST_CASE("a subscribed scoreboard counts captures the bus delivers") {
+    kfc::bus::EventBus bus;
     ScoreBoard scores;
+    scores.subscribeTo(bus);
 
-    scores.onAction({kAnyId, Color::kWhite, PieceKind::kRook, kAnyCell, kAnyCell,
-                     kfc::engine::ActionKind::kMove, kAnyTime});
-    scores.onGameOver({Color::kWhite, kAnyTime});
+    bus.publish(captureOf(PieceKind::kQueen, Color::kBlack, Color::kWhite));
+
+    CHECK(scores.scoreOf(Color::kWhite) == kfc::model::costOf(PieceKind::kQueen));
+}
+
+TEST_CASE("a scoreboard ignores what it is not there to count") {
+    kfc::bus::EventBus bus;
+    ScoreBoard scores;
+    scores.subscribeTo(bus);
+
+    bus.publish(kfc::engine::ActionEvent{kAnyId, Color::kWhite, PieceKind::kRook,
+                                         kAnyCell, kAnyCell,
+                                         kfc::engine::ActionKind::kMove, kAnyTime});
+    bus.publish(kfc::engine::GameOverEvent{Color::kWhite, kAnyTime});
 
     CHECK(scores.scoreOf(Color::kWhite) == 0);
 }

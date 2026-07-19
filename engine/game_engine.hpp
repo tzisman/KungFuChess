@@ -3,7 +3,8 @@
 #include <string>
 #include <vector>
 
-#include "engine/game_observer.hpp"
+#include "bus/event_bus.hpp"
+#include "engine/game_events.hpp"
 #include "model/board.hpp"
 #include "model/game_state.hpp"
 #include "model/position.hpp"
@@ -29,11 +30,12 @@ public:
     GameEngine(const GameEngine&) = delete;
     GameEngine& operator=(const GameEngine&) = delete;
 
-    // Follows the game from the outside. The engine reports what happened and
-    // knows nothing of what an observer does with it, which is what lets a
-    // scoreboard or a log exist without the rules ever hearing of them. The
-    // observer must outlive the engine.
-    void addObserver(GameObserver& observer);
+    // The bus the engine publishes to. Whoever wants to follow the game
+    // subscribes here; the engine reports what happened and knows nothing of
+    // who is listening, which is what lets a scoreboard, a log, or a server
+    // exist without the rules ever hearing of them. Subscribers must outlive
+    // the engine.
+    bus::EventBus& events();
 
     MoveResult requestMove(model::Position from, model::Position to);
     MoveResult requestJump(model::Position cell);
@@ -55,14 +57,10 @@ private:
     void endGame(const realtime::ArrivalReport& report);
     void applyPromotion(const realtime::ArrivalReport& report);
 
-    void notifyAction(const ActionEvent& event) const;
-    void notifyCapture(const CaptureEvent& event) const;
-    void notifyGameOver(const GameOverEvent& event) const;
-
     model::GameState state_;
     rules::RuleEngine ruleEngine_;
     realtime::RealTimeArbiter arbiter_;
-    std::vector<GameObserver*> observers_;
+    bus::EventBus bus_;
 };
 
 }
