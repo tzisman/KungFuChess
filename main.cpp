@@ -6,6 +6,7 @@
 #include "app/composition.hpp"
 #include "engine/game_engine.hpp"
 #include "input/controller.hpp"
+#include "input/engine_command_sink.hpp"
 #include "io/board_parser.hpp"
 #include "io/board_printer.hpp"
 #include "model/board.hpp"
@@ -21,11 +22,13 @@ int main() {
 
         kfc::engine::GameEngine engine{std::move(parsed.board)};
         const kfc::model::Board& board = engine.board();
+        kfc::input::EngineCommandSink commands{engine};
         kfc::input::Controller controller = kfc::app::makeController(
-            engine, kfc::view::BoardGeometry{
-                        board.width() * kfc::texttests::kCellSize,
-                        board.height() * kfc::texttests::kCellSize,
-                        board.width(), board.height()});
+            board, commands,
+            kfc::view::BoardGeometry{
+                board.width() * kfc::texttests::kCellSize,
+                board.height() * kfc::texttests::kCellSize, board.width(),
+                board.height()});
         kfc::texttests::ScriptRunner runner{controller, engine, std::cout};
 
         for (const std::string& line : parsed.commands) {

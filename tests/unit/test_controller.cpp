@@ -3,6 +3,7 @@
 #include "engine/game_engine.hpp"
 #include "input/board_mapper.hpp"
 #include "input/controller.hpp"
+#include "input/engine_command_sink.hpp"
 #include "model/board.hpp"
 #include "model/piece.hpp"
 #include "model/position.hpp"
@@ -12,6 +13,7 @@
 using kfc::engine::GameEngine;
 using kfc::input::BoardMapper;
 using kfc::input::Controller;
+using kfc::input::EngineCommandSink;
 using kfc::view::BoardGeometry;
 using kfc::model::Board;
 using kfc::model::Color;
@@ -43,7 +45,8 @@ int centerY(int row) { return row * kCellSize + kCellSize / 2; }
 
 TEST_CASE("a first click on an empty cell is ignored") {
     GameEngine engine{boardWithRook()};
-    Controller controller{engine, mapper()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper()};
 
     controller.handleClick(centerX(0), centerY(0));
 
@@ -52,7 +55,8 @@ TEST_CASE("a first click on an empty cell is ignored") {
 
 TEST_CASE("a first click outside the board is ignored") {
     GameEngine engine{boardWithRook()};
-    Controller controller{engine, mapper()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper()};
 
     controller.handleClick(centerX(8), centerY(0));
 
@@ -61,7 +65,8 @@ TEST_CASE("a first click outside the board is ignored") {
 
 TEST_CASE("a first click on a piece selects it") {
     GameEngine engine{boardWithRook()};
-    Controller controller{engine, mapper()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper()};
 
     controller.handleClick(centerX(4), centerY(4));
 
@@ -71,7 +76,8 @@ TEST_CASE("a first click on a piece selects it") {
 
 TEST_CASE("a second click inside the board requests the move and clears the selection") {
     GameEngine engine{boardWithRook()};
-    Controller controller{engine, mapper()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper()};
 
     controller.handleClick(centerX(4), centerY(4));
     controller.handleClick(centerX(7), centerY(4));
@@ -86,7 +92,8 @@ TEST_CASE("a second click inside the board requests the move and clears the sele
 
 TEST_CASE("a second click outside the board cancels the selection without moving") {
     GameEngine engine{boardWithRook()};
-    Controller controller{engine, mapper()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper()};
 
     controller.handleClick(centerX(4), centerY(4));
     controller.handleClick(centerX(8), centerY(4));
@@ -99,7 +106,8 @@ TEST_CASE("a second click outside the board cancels the selection without moving
 
 TEST_CASE("an illegal second click still clears the selection and moves nothing") {
     GameEngine engine{boardWithRook()};
-    Controller controller{engine, mapper()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper()};
 
     controller.handleClick(centerX(4), centerY(4));
     controller.handleClick(centerX(5), centerY(5));

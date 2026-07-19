@@ -11,6 +11,7 @@
 #include "engine/game_engine.hpp"
 #include "img.hpp"
 #include "input/controller.hpp"
+#include "input/engine_command_sink.hpp"
 #include "io/board_parser.hpp"
 #include "io/piece_codec.hpp"
 #include "io/piece_config.hpp"
@@ -132,8 +133,9 @@ int main() {
                                      layout};
         kfc::view::Window window{kWindowTitle};
 
+        kfc::input::EngineCommandSink commands{engine};
         kfc::input::Controller controller =
-            kfc::app::makeController(engine, geometry);
+            kfc::app::makeController(board, commands, geometry);
 
         Clock::time_point start = Clock::now();
         Clock::time_point last = start;

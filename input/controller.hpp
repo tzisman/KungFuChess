@@ -2,15 +2,17 @@
 
 #include <optional>
 
-#include "engine/game_engine.hpp"
 #include "input/board_mapper.hpp"
+#include "input/command_sink.hpp"
+#include "model/board.hpp"
 #include "model/position.hpp"
 
 namespace kfc::input {
 
 class Controller {
 public:
-    Controller(engine::GameEngine& engine, BoardMapper mapper);
+    Controller(const model::Board& board, CommandSink& commands,
+               BoardMapper mapper);
 
     void handleClick(int x, int y);
     void handleJump(int x, int y);
@@ -21,7 +23,8 @@ private:
     void handleSecondClick(std::optional<model::Position> cell);
     bool isOwnPiece(model::Position cell) const;
 
-    engine::GameEngine& engine_;
+    const model::Board& board_;
+    CommandSink& commands_;
     BoardMapper mapper_;
     std::optional<model::Position> selected_;
 };
