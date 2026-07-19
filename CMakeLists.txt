@@ -83,6 +83,7 @@ target_include_directories(kfc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 # it knows nothing of sockets (net) or display (view), so both sides link it.
 add_library(kfc_protocol
     protocol/json_codec.cpp
+    protocol/wire_snapshot.cpp
 )
 target_link_libraries(kfc_protocol PUBLIC kfc)
 target_include_directories(kfc_protocol PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
@@ -133,6 +134,7 @@ add_executable(unit_tests
     tests/unit/test_piece_config.cpp
     tests/unit/test_script_parser.cpp
     tests/unit/test_protocol.cpp
+    tests/unit/test_wire_snapshot.cpp
 )
 target_link_libraries(unit_tests PRIVATE doctest kfc kfc_protocol)
 

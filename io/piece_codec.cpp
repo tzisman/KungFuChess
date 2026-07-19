@@ -19,12 +19,6 @@ constexpr std::array<KindLetter, 6> kKindLetters{{
     {model::PieceKind::kPawn, 'P'},
 }};
 
-std::optional<model::PieceKind> kindOf(char letter) {
-    for (const KindLetter& entry : kKindLetters)
-        if (entry.letter == letter) return entry.kind;
-    return std::nullopt;
-}
-
 }  // namespace
 
 char kindLetter(model::PieceKind kind) {
@@ -43,6 +37,12 @@ std::optional<model::Color> colorFromLetter(char letter) {
     return std::nullopt;
 }
 
+std::optional<model::PieceKind> kindFromLetter(char letter) {
+    for (const KindLetter& entry : kKindLetters)
+        if (entry.letter == letter) return entry.kind;
+    return std::nullopt;
+}
+
 bool isEmptyToken(const std::string& token) {
     return token.size() == 1 && token[0] == kEmptyToken;
 }
@@ -50,7 +50,7 @@ bool isEmptyToken(const std::string& token) {
 std::optional<PieceCode> pieceFromToken(const std::string& token) {
     if (token.size() != 2) return std::nullopt;
     std::optional<model::Color> color = colorFromLetter(token[0]);
-    std::optional<model::PieceKind> kind = kindOf(token[1]);
+    std::optional<model::PieceKind> kind = kindFromLetter(token[1]);
     if (!color || !kind) return std::nullopt;
     return PieceCode{*color, *kind};
 }
