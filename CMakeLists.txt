@@ -29,7 +29,7 @@ target_link_libraries(kfc_img PUBLIC ${OpenCV_LIBS})
 # defines), so the pure logic library kfc stays free of any networking dependency
 # and consumers link only against the future net/transport.hpp interface.
 add_library(kfc_net
-    net/net_deps_check.cpp
+    net/websocketpp_transport.cpp
 )
 target_include_directories(kfc_net
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
@@ -44,8 +44,14 @@ target_compile_definitions(kfc_net PRIVATE
     ASIO_STANDALONE _WEBSOCKETPP_CPP11_STL_ _WEBSOCKETPP_CPP11_THREAD_)
 if (WIN32)
     target_compile_definitions(kfc_net PRIVATE _WIN32_WINNT=0x0601)
-    target_link_libraries(kfc_net PUBLIC ws2_32 wsock32)
+    target_link_libraries(kfc_net PUBLIC ws2_32 wsock32 mswsock)
 endif()
+
+# Layer-neutral utilities shared by the server and client composition roots.
+add_library(kfc_common
+    common/logger.cpp
+)
+target_include_directories(kfc_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # All production sources across the layers, shared by the app and the tests.
 add_library(kfc
@@ -107,6 +113,11 @@ target_link_libraries(kfc_view PUBLIC kfc kfc_img)
 # sits inside the display-only view layer.
 add_executable(kungfu_chess_gui main_gui.cpp)
 target_link_libraries(kungfu_chess_gui PRIVATE kfc_view)
+
+# Composition root of the server: owns the transport and (in later steps) the
+# authoritative game. Links the networking layer, never the display.
+add_executable(kungfu_chess_server main_server.cpp)
+target_link_libraries(kungfu_chess_server PRIVATE kfc_net kfc_common)
 
 # Unit tests. Each tests/unit/test_<module>.cpp is registered here.
 add_executable(unit_tests
