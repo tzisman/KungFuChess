@@ -9,6 +9,7 @@
 #include "net/websocketpp_transport.hpp"
 #include "server/command_queue.hpp"
 #include "server/game_session.hpp"
+#include "server/player_names.hpp"
 #include "server/server_app.hpp"
 
 namespace {
@@ -32,8 +33,10 @@ int main() {
 
     kfc::net::WebsocketppServer transport;
     kfc::server::CommandQueue commands;
-    kfc::server::ServerApp app{transport, log, commands};
-    kfc::server::GameSession game{transport, commands, std::move(parsed.board)};
+    kfc::server::PlayerNames names;
+    kfc::server::ServerApp app{transport, log, commands, names};
+    kfc::server::GameSession game{transport, commands, names,
+                                  std::move(parsed.board)};
 
     transport.listen(kPort);
     log.info("listening on port " + std::to_string(kPort));

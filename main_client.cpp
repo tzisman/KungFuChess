@@ -19,6 +19,7 @@
 #include "protocol/json_codec.hpp"
 #include "protocol/messages.hpp"
 #include "protocol/wire_snapshot.hpp"
+#include "rules/rule_engine.hpp"
 #include "view/board_geometry.hpp"
 #include "view/game_snapshot.hpp"
 #include "view/panel_layout.hpp"
@@ -73,11 +74,43 @@ void syncBoard(kfc::model::Board& board,
     }
 }
 
+// Printable ASCII only. The panel draws names with OpenCV's built-in Hershey
+// font, which has no glyphs outside that range, and a name typed in the
+// console's native codepage is not guaranteed to be valid UTF-8 either — both
+// are sidestepped by asking again rather than sending text that cannot be
+// shown or safely encoded.
+bool isPlainAscii(const std::string& text) {
+    for (unsigned char c : text) {
+        if (c < 0x20 || c > 0x7E) return false;
+    }
+    return true;
+}
+
+// The same legality the offline path gets from GameEngine::legalDestinationsFrom
+// (rules::RuleEngine plus an idle, game-not-over guard), computed against the
+// client's own local mirror instead of an engine it does not have. This is a
+// display hint only: the server enforces the real rule when the move actually
+// arrives, so a stale frame here costs nothing but a momentarily wrong dot.
+std::vector<kfc::model::Position> legalDestinationsFrom(
+    const kfc::model::Board& board, kfc::model::Position from, bool gameOver) {
+    if (gameOver) return {};
+    std::optional<kfc::model::Piece> piece = board.pieceAt(from);
+    if (!piece || piece->state() != kfc::model::PieceState::kIdle) return {};
+
+    kfc::rules::RuleEngine ruleEngine;
+    kfc::rules::Destinations destinations = ruleEngine.legalDestinations(board, from);
+    return {destinations.begin(), destinations.end()};
+}
+
 std::string askForName() {
-    std::cout << "Enter your name: ";
-    std::string name;
-    std::getline(std::cin, name);
-    return name.empty() ? kDefaultPlayerName : name;
+    while (true) {
+        std::cout << "Enter your name (English letters/digits only): ";
+        std::string name;
+        std::getline(std::cin, name);
+        if (name.empty()) return kDefaultPlayerName;
+        if (isPlainAscii(name)) return name;
+        std::cout << "Please use plain English letters and digits.\n";
+    }
 }
 
 // What joining resolved to, filled in from the network thread's onMessage/
@@ -214,9 +247,16 @@ int main() {
                 dispatch(event, *controller);
             }
 
+            std::vector<kfc::model::Position> moveTargets;
+            if (std::optional<kfc::model::Position> selection = controller->selection()) {
+                moveTargets =
+                    legalDestinationsFrom(*board, *selection, current->gameOver);
+            }
+
             window.show(renderer->render(
                 kfc::view::buildSnapshot(std::move(*current),
-                                         controller->selection(), {}),
+                                         controller->selection(),
+                                         std::move(moveTargets)),
                 elapsedMsSince(start)));
         }
 

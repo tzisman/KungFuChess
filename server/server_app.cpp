@@ -9,8 +9,8 @@
 namespace kfc::server {
 
 ServerApp::ServerApp(net::ServerTransport& transport, common::Logger& log,
-                     CommandQueue& commands)
-    : transport_(transport), log_(log), commands_(commands) {
+                     CommandQueue& commands, PlayerNames& names)
+    : transport_(transport), log_(log), commands_(commands), names_(names) {
     transport_.onOpen([this](net::ConnectionId id) { onOpen(id); });
     transport_.onMessage([this](net::ConnectionId id, const std::string& text) {
         onMessage(id, text);
@@ -56,6 +56,7 @@ void ServerApp::handleJoin(net::ConnectionId id, const std::string& name) {
         return;
     }
     sessions_.emplace(id, Session{id, *color, name});
+    names_.set(*color, name);
     log_.info(name + " joined as " + model::nameOf(*color) + " (connection " +
               std::to_string(id) + ")");
     transport_.send(id, protocol::encode(protocol::Assigned{*color}));

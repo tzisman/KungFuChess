@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <optional>
 #include <utility>
 
@@ -11,6 +12,7 @@
 #include "realtime/motion.hpp"
 #include "server/command_queue.hpp"
 #include "server/game_session.hpp"
+#include "server/player_names.hpp"
 
 using kfc::model::Board;
 using kfc::model::Color;
@@ -24,6 +26,7 @@ using kfc::server::CommandQueue;
 using kfc::server::GameSession;
 using kfc::server::JumpCommand;
 using kfc::server::MoveCommand;
+using kfc::server::PlayerNames;
 using kfc::test::FakeServerTransport;
 
 namespace {
@@ -48,7 +51,8 @@ std::optional<kfc::product::PieceSnapshot> pieceAt(const GameStateView& state,
 TEST_CASE("a tick broadcasts a decodable snapshot of the current state") {
     FakeServerTransport transport;
     CommandQueue commands;
-    GameSession game{transport, commands, boardWithRook()};
+    PlayerNames names;
+    GameSession game{transport, commands, names, boardWithRook()};
 
     game.tick(0);
 
@@ -66,7 +70,8 @@ TEST_CASE("a tick broadcasts a decodable snapshot of the current state") {
 TEST_CASE("successive ticks broadcast the advancing state to every client") {
     FakeServerTransport transport;
     CommandQueue commands;
-    GameSession game{transport, commands, boardWithRook()};
+    PlayerNames names;
+    GameSession game{transport, commands, names, boardWithRook()};
 
     game.tick(0);
     game.tick(kSquareTravelMs);
@@ -74,10 +79,28 @@ TEST_CASE("successive ticks broadcast the advancing state to every client") {
     CHECK(transport.broadcasts.size() == 2);
 }
 
+TEST_CASE("a registered name is broadcast instead of the generic colour name") {
+    FakeServerTransport transport;
+    CommandQueue commands;
+    PlayerNames names;
+    names.set(Color::kWhite, "Alice");
+    GameSession game{transport, commands, names, boardWithRook()};
+
+    game.tick(0);
+
+    std::optional<GameStateView> state = decodeSnapshot(transport.broadcasts.back());
+    REQUIRE(state.has_value());
+    auto white = std::find_if(state->players.begin(), state->players.end(),
+                              [](const auto& player) { return player.color == Color::kWhite; });
+    REQUIRE(white != state->players.end());
+    CHECK(white->name == "Alice");
+}
+
 TEST_CASE("a queued move for the piece's own colour is applied") {
     FakeServerTransport transport;
     CommandQueue commands;
-    GameSession game{transport, commands, boardWithRook()};
+    PlayerNames names;
+    GameSession game{transport, commands, names, boardWithRook()};
     // A single-square hop, so the route's next cell is the final destination.
     commands.push(MoveCommand{Color::kWhite, Position{4, 4}, Position{4, 5}});
 
@@ -93,7 +116,8 @@ TEST_CASE("a queued move for the piece's own colour is applied") {
 TEST_CASE("a queued move tagged with the wrong colour for that square is ignored") {
     FakeServerTransport transport;
     CommandQueue commands;
-    GameSession game{transport, commands, boardWithRook()};
+    PlayerNames names;
+    GameSession game{transport, commands, names, boardWithRook()};
     // The rook at {4,4} is white; a black-tagged move claiming to own it must
     // not move the piece — this is the ownership check the server enforces.
     commands.push(MoveCommand{Color::kBlack, Position{4, 4}, Position{4, 6}});
@@ -110,7 +134,8 @@ TEST_CASE("a queued move tagged with the wrong colour for that square is ignored
 TEST_CASE("a queued jump for an empty square is ignored") {
     FakeServerTransport transport;
     CommandQueue commands;
-    GameSession game{transport, commands, boardWithRook()};
+    PlayerNames names;
+    GameSession game{transport, commands, names, boardWithRook()};
     commands.push(JumpCommand{Color::kWhite, Position{0, 0}});
 
     game.tick(0);

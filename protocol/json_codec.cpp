@@ -66,7 +66,12 @@ std::optional<std::string> stringField(const json& object, const char* key) {
 }  // namespace
 
 std::string encode(const Message& message) {
-    return std::visit(EncodeVisitor{}, message).dump();
+    // A user-supplied field (a player's name) can carry bytes that are not
+    // valid UTF-8 if it came from a misconfigured console or a misbehaving
+    // client. Replacing rather than throwing keeps one bad name from crashing
+    // whichever side — client or server — encodes it.
+    return std::visit(EncodeVisitor{}, message)
+        .dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 }
 
 std::optional<Message> decode(const std::string& text) {

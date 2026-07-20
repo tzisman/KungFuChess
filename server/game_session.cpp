@@ -25,9 +25,11 @@ int elapsedMsSince(Clock::time_point& last) {
 }  // namespace
 
 GameSession::GameSession(net::ServerTransport& transport, CommandQueue& commands,
-                         model::Board board, realtime::MotionProfiles profiles)
+                         PlayerNames& names, model::Board board,
+                         realtime::MotionProfiles profiles)
     : transport_(transport),
       commands_(commands),
+      names_(names),
       engine_(std::move(board), std::move(profiles)) {
     scores_.subscribeTo(engine_.events());
     moveLog_.subscribeTo(engine_.events());
@@ -74,6 +76,11 @@ void GameSession::stop() { running_ = false; }
 void GameSession::broadcastState() {
     product::GameStateView state =
         product::gameStateView(engine_, scores_, moveLog_);
+    for (product::PlayerSnapshot& player : state.players) {
+        if (std::optional<std::string> name = names_.get(player.color)) {
+            player.name = *name;
+        }
+    }
     transport_.broadcast(protocol::encodeSnapshot(state));
 }
 

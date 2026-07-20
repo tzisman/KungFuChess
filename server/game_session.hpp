@@ -11,6 +11,7 @@
 #include "product/score_board.hpp"
 #include "realtime/motion.hpp"
 #include "server/command_queue.hpp"
+#include "server/player_names.hpp"
 
 namespace kfc::server {
 
@@ -18,11 +19,13 @@ namespace kfc::server {
 // and move log, and the loop that applies queued player commands, advances the
 // clock, and broadcasts the state to every connected client. It is the only
 // thing that touches the engine, so all engine access stays on the loop's
-// thread; commands_ is how the network thread's intents reach it safely.
+// thread; commands_ is how the network thread's intents reach it safely, and
+// names_ is how the display name each joiner chose reaches the broadcast.
 class GameSession {
 public:
     GameSession(net::ServerTransport& transport, CommandQueue& commands,
-                model::Board board, realtime::MotionProfiles profiles = {});
+                PlayerNames& names, model::Board board,
+                realtime::MotionProfiles profiles = {});
 
     // Apply every command queued since the last tick, advance the clock by
     // elapsedMs, and broadcast the resulting state once.
@@ -41,6 +44,7 @@ private:
 
     net::ServerTransport& transport_;
     CommandQueue& commands_;
+    PlayerNames& names_;
     product::ScoreBoard scores_;
     product::MoveLog moveLog_;
     engine::GameEngine engine_;

@@ -223,7 +223,9 @@ std::string encodeSnapshot(const product::GameStateView& state) {
                 {kGameOverKey, state.gameOver},
                 {kPiecesKey, std::move(pieces)},
                 {kPlayersKey, std::move(players)}};
-    return out.dump();
+    // A player's own name is user-supplied text; replace rather than throw if
+    // it is not valid UTF-8, so it cannot crash the broadcasting server.
+    return out.dump(-1, ' ', false, json::error_handler_t::replace);
 }
 
 std::optional<product::GameStateView> decodeSnapshot(const std::string& text) {
