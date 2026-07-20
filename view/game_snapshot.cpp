@@ -41,18 +41,24 @@ std::vector<PlayerView> wordPlayers(
 
 }
 
-GameSnapshot buildSnapshot(const engine::GameEngine& engine,
+GameSnapshot buildSnapshot(product::GameStateView state,
                            const std::optional<model::Position>& selection,
-                           const product::ScoreBoard& scores,
-                           const product::MoveLog& log) {
-    product::GameStateView state = product::gameStateView(engine, scores, log);
+                           std::vector<model::Position> moveTargets) {
     return {state.boardWidth,
             state.boardHeight,
             std::move(state.pieces),
             selection,
-            collectMoveTargets(engine, selection),
+            std::move(moveTargets),
             state.gameOver,
             wordPlayers(state.players, state.boardHeight)};
+}
+
+GameSnapshot buildSnapshot(const engine::GameEngine& engine,
+                           const std::optional<model::Position>& selection,
+                           const product::ScoreBoard& scores,
+                           const product::MoveLog& log) {
+    return buildSnapshot(product::gameStateView(engine, scores, log), selection,
+                         collectMoveTargets(engine, selection));
 }
 
 }

@@ -47,4 +47,12 @@ GameSnapshot buildSnapshot(const engine::GameEngine& engine,
                            const product::ScoreBoard& scores,
                            const product::MoveLog& log);
 
+// The engine-free path: build the drawn snapshot straight from a neutral
+// read-model. A networked client, which holds no engine, decodes a
+// GameStateView off the wire and renders through this. The selection and move
+// targets are the client's own local UI, not part of the shared state.
+GameSnapshot buildSnapshot(product::GameStateView state,
+                           const std::optional<model::Position>& selection,
+                           std::vector<model::Position> moveTargets);
+
 }
