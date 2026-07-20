@@ -110,3 +110,26 @@ TEST_CASE("setting a piece kind on an empty cell is rejected") {
     Board board{8, 8};
     CHECK_THROWS_AS(board.setPieceKind(Position{7, 0}, PieceKind::kQueen), CellEmptyError);
 }
+
+TEST_CASE("clearing a board empties every occupied cell") {
+    Board board{8, 8};
+    board.addPiece(pawnAt(Position{1, 0}, 1));
+    board.addPiece(pawnAt(Position{2, 0}, 2));
+
+    board.clear();
+
+    CHECK_FALSE(board.pieceAt(Position{1, 0}).has_value());
+    CHECK_FALSE(board.pieceAt(Position{2, 0}).has_value());
+}
+
+TEST_CASE("a cleared board accepts a piece on a cell that was occupied before") {
+    Board board{8, 8};
+    board.addPiece(pawnAt(Position{1, 0}, 1));
+    board.clear();
+
+    board.addPiece(pawnAt(Position{1, 0}, 9));
+
+    auto piece = board.pieceAt(Position{1, 0});
+    REQUIRE(piece.has_value());
+    CHECK(piece->id() == 9);
+}

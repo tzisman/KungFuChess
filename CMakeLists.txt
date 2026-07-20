@@ -155,6 +155,7 @@ add_executable(unit_tests
     tests/unit/test_panel_layout.cpp
     tests/unit/test_board_mapper.cpp
     tests/unit/test_controller.cpp
+    tests/unit/test_network_command_sink.cpp
     tests/unit/test_game_snapshot.cpp
     tests/unit/test_board_parser.cpp
     tests/unit/test_board_printer.cpp

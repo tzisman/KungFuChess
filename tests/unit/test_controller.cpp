@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <utility>
+
 #include "engine/game_engine.hpp"
 #include "input/board_mapper.hpp"
 #include "input/controller.hpp"
@@ -102,6 +104,29 @@ TEST_CASE("a second click outside the board cancels the selection without moving
 
     engine.advance(3 * kSquareTravelMs);
     CHECK(engine.board().pieceAt(Position{4, 4}).has_value());
+}
+
+TEST_CASE("a first click on your own colour selects it when myColor is set") {
+    GameEngine engine{boardWithRook()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper(), Color::kWhite};
+
+    controller.handleClick(centerX(4), centerY(4));
+
+    REQUIRE(controller.selection().has_value());
+    CHECK(*controller.selection() == Position{4, 4});
+}
+
+TEST_CASE("a first click on the opponent's piece is ignored when myColor is set") {
+    Board board = boardWithRook();
+    board.addPiece(Piece{2, Color::kBlack, PieceKind::kRook, Position{0, 0}});
+    GameEngine engine{std::move(board)};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper(), Color::kWhite};
+
+    controller.handleClick(centerX(0), centerY(0));
+
+    CHECK_FALSE(controller.selection().has_value());
 }
 
 TEST_CASE("an illegal second click still clears the selection and moves nothing") {

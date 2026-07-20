@@ -26,6 +26,8 @@ void Board::addPiece(const Piece& piece) {
     }
 }
 
+void Board::clear() { cells_.clear(); }
+
 void Board::removePiece(Position cell) {
     requireInBounds(cell);
     if (cells_.erase(cell) == 0) {

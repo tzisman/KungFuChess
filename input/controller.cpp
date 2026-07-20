@@ -5,8 +5,8 @@
 namespace kfc::input {
 
 Controller::Controller(const model::Board& board, CommandSink& commands,
-                       BoardMapper mapper)
-    : board_(board), commands_(commands), mapper_(mapper) {}
+                       BoardMapper mapper, std::optional<model::Color> myColor)
+    : board_(board), commands_(commands), mapper_(mapper), myColor_(myColor) {}
 
 void Controller::handleClick(int x, int y) {
     std::optional<model::Position> cell = mapper_.toCell(x, y);
@@ -28,7 +28,9 @@ const std::optional<model::Position>& Controller::selection() const {
 
 void Controller::handleFirstClick(std::optional<model::Position> cell) {
     if (!cell) return;
-    if (!board_.pieceAt(*cell)) return;
+    std::optional<model::Piece> piece = board_.pieceAt(*cell);
+    if (!piece) return;
+    if (myColor_ && piece->color() != *myColor_) return;
     selected_ = cell;
 }
 

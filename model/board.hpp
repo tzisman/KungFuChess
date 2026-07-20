@@ -20,6 +20,10 @@ public:
 
     void addPiece(const Piece& piece);
     void removePiece(Position cell);
+    // Empties every cell. Lets a board be repopulated in place from a fresh
+    // read-model instead of rebuilt, so anything holding a reference to it
+    // (e.g. a Controller) keeps seeing the same object as its contents change.
+    void clear();
     void movePiece(Position from, Position to);
     void setPieceKind(Position cell, PieceKind kind);
     void setPieceState(Position cell, PieceState state);

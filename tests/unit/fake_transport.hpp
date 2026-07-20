@@ -49,4 +49,27 @@ private:
     CloseHandler close_;
 };
 
+// A client transport that never touches a socket. It records what was sent,
+// for a test to inspect what a CommandSink handed to the wire.
+class FakeClientTransport : public net::ClientTransport {
+public:
+    void onOpen(OpenHandler handler) override { open_ = std::move(handler); }
+    void onMessage(MessageHandler handler) override {
+        message_ = std::move(handler);
+    }
+    void onClose(CloseHandler handler) override { close_ = std::move(handler); }
+
+    void connect(const std::string&) override {}
+    void send(const std::string& message) override { sent.push_back(message); }
+    void run() override {}
+    void stop() override {}
+
+    std::vector<std::string> sent;
+
+private:
+    OpenHandler open_;
+    MessageHandler message_;
+    CloseHandler close_;
+};
+
 }
