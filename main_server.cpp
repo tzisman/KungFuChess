@@ -14,7 +14,7 @@
 
 namespace {
 constexpr std::uint16_t kPort = 9002;
-constexpr char kStartBoardPath[] = "boards/start.txt";
+constexpr char kStartBoardPath[] = "texttests/start.txt";
 }
 
 // Composition root of the server. It owns the concrete transport, the join logic
