@@ -4,7 +4,7 @@
 #include <thread>
 #include <utility>
 
-#include "common/logger.hpp"
+#include "shared/common/logger.hpp"
 #include "io/board_parser.hpp"
 #include "net/websocketpp_transport.hpp"
 #include "server/command_queue.hpp"
