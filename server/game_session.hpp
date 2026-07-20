@@ -15,12 +15,7 @@
 
 namespace kfc::server {
 
-// Owns the one authoritative game: the engine, the observers that derive score
-// and move log, and the loop that applies queued player commands, advances the
-// clock, and broadcasts the state to every connected client. It is the only
-// thing that touches the engine, so all engine access stays on the loop's
-// thread; commands_ is how the network thread's intents reach it safely, and
-// names_ is how the display name each joiner chose reaches the broadcast.
+
 class GameSession {
 public:
     GameSession(net::ServerTransport& transport, CommandQueue& commands,
