@@ -37,7 +37,7 @@ constexpr char kWindowTitle[] = "KungFuChess";
 // How large the board is drawn on screen. The window sizes itself to the
 // picture, so this is the one number to change to get a bigger or smaller
 // board; everything else is measured from it.
-constexpr int kBoardDisplaySize = 500;
+constexpr int kBoardDisplaySize = 435;
 
 constexpr int kFrameDelayMs = 30;
 constexpr int kQuitKey = 27;  // Esc

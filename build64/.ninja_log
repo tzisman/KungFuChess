@@ -141,3 +141,11 @@
 46297	46656	8062360838503177	libkfc_net.a	fdda030a7496f4be
 46656	47139	8062360842083911	kungfu_chess_server.exe	7e920b2c8dfd72c0
 46674	47217	8062360842273982	kungfu_chess_client.exe	23c0b9a0ebc7085b
+12	3052	8062378888174942	CMakeFiles/kungfu_chess_gui.dir/main_gui.cpp.obj	aeae8706c47162c0
+3053	3949	8062378918590164	kungfu_chess_gui.exe	cb644207803a3c88
+71	4439	8062378888763361	CMakeFiles/kungfu_chess_client.dir/main_client.cpp.obj	1a621270050287f6
+4439	5457	8062378932449704	kungfu_chess_client.exe	23c0b9a0ebc7085b
+25	3317	8062380913503274	CMakeFiles/kungfu_chess_gui.dir/main_gui.cpp.obj	aeae8706c47162c0
+3317	3902	8062380946414049	kungfu_chess_gui.exe	cb644207803a3c88
+108	4224	8062380914327574	CMakeFiles/kungfu_chess_client.dir/main_client.cpp.obj	1a621270050287f6
+4224	4979	8062380955490425	kungfu_chess_client.exe	23c0b9a0ebc7085b
