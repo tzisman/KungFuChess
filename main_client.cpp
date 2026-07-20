@@ -1,4 +1,5 @@
 #include <chrono>
+#include <iostream>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -31,12 +32,10 @@ constexpr char kServerUri[] = "ws://127.0.0.1:9002";
 constexpr char kBoardImagePath[] = "images/board.png";
 constexpr char kPiecesRoot[] = "images/pieces3";
 constexpr char kWindowTitle[] = "KungFuChess (client)";
-// Terminal registration (asking for a real name and waiting for Assigned
-// before opening the window) is step 11; this placeholder is enough for the
-// server to have a name and hand back a colour.
-constexpr char kPlayerName[] = "Player";
+constexpr char kDefaultPlayerName[] = "Player";
 constexpr int kBoardDisplaySize = 640;
 constexpr int kFrameDelayMs = 30;
+constexpr int kJoinPollMs = 20;
 constexpr int kQuitKey = 27;  // Esc
 
 using Clock = std::chrono::steady_clock;
@@ -74,50 +73,105 @@ void syncBoard(kfc::model::Board& board,
     }
 }
 
+std::string askForName() {
+    std::cout << "Enter your name: ";
+    std::string name;
+    std::getline(std::cin, name);
+    return name.empty() ? kDefaultPlayerName : name;
+}
+
+// What joining resolved to, filled in from the network thread's onMessage/
+// onClose handlers and read by the main thread's wait loop below. Only one of
+// the three ever becomes set.
+struct JoinOutcome {
+    std::mutex mutex;
+    std::optional<kfc::model::Color> color;
+    std::optional<std::string> rejection;
+    bool closed = false;
+};
+
+// Blocks the caller until the server has answered the join request one way or
+// another, so the window never opens on a rejected or dropped connection. A
+// short poll is enough: this only runs once, before the game itself starts.
+std::optional<kfc::model::Color> awaitJoin(JoinOutcome& outcome) {
+    while (true) {
+        {
+            std::lock_guard<std::mutex> lock{outcome.mutex};
+            if (outcome.color) return outcome.color;
+            if (outcome.rejection) {
+                std::cerr << "Server rejected join: " << *outcome.rejection << "\n";
+                return std::nullopt;
+            }
+            if (outcome.closed) {
+                std::cerr << "Connection closed before joining\n";
+                return std::nullopt;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(kJoinPollMs));
+    }
+}
+
 }  // namespace
 
-// Step 10 client: a full networked player. It holds no engine; every click
-// becomes a MoveIntent/JumpIntent sent to the authoritative server through
-// NetworkCommandSink, and every frame drawn comes from the server's own
-// broadcast snapshot. The transport's io loop runs on a background thread and
-// only stores the latest decoded message under a mutex; the main thread owns
-// OpenCV and reads that state to draw and to drive the shared Controller.
+// Step 11 client: registers by name in the terminal and opens the game window
+// only once the server has assigned a colour, completing the join flow from
+// step 2 of the plan. From there it plays exactly as step 10 left it: no local
+// engine, every click becomes a MoveIntent/JumpIntent, every frame drawn comes
+// from the server's own broadcast snapshot. The transport's io loop runs on a
+// background thread; the main thread owns OpenCV and the shared state it reads
+// is guarded by a mutex throughout.
 int main() {
     kfc::common::Logger log{"CLIENT"};
+    std::string name = askForName();
 
-    std::mutex mutex;
+    JoinOutcome join;
+    std::mutex stateMutex;
     std::optional<kfc::product::GameStateView> latest;
-    std::optional<kfc::model::Color> myColor;
 
     kfc::net::WebsocketppClient transport;
     kfc::input::NetworkCommandSink commands{transport};
 
-    transport.onOpen([&log, &transport]() {
-        log.info("connected -> joining");
+    transport.onOpen([&log, &transport, &name]() {
+        log.info("connected -> joining as " + name);
         transport.send(kfc::protocol::encode(
-            kfc::protocol::Message{kfc::protocol::JoinRequest{kPlayerName}}));
+            kfc::protocol::Message{kfc::protocol::JoinRequest{name}}));
     });
-    transport.onClose([&log]() { log.info("closed"); });
-    transport.onMessage([&mutex, &latest, &myColor](const std::string& text) {
+    transport.onClose([&log, &join]() {
+        log.info("closed");
+        std::lock_guard<std::mutex> lock{join.mutex};
+        join.closed = true;
+    });
+    transport.onMessage([&join, &stateMutex, &latest](const std::string& text) {
         if (std::optional<kfc::protocol::Message> message =
                 kfc::protocol::decode(text)) {
             if (const auto* assigned =
                     std::get_if<kfc::protocol::Assigned>(&*message)) {
-                std::lock_guard<std::mutex> lock{mutex};
-                myColor = assigned->color;
+                std::lock_guard<std::mutex> lock{join.mutex};
+                join.color = assigned->color;
+            } else if (const auto* rejected =
+                           std::get_if<kfc::protocol::Rejected>(&*message)) {
+                std::lock_guard<std::mutex> lock{join.mutex};
+                join.rejection = rejected->reason;
             }
             return;
         }
         std::optional<kfc::product::GameStateView> decoded =
             kfc::protocol::decodeSnapshot(text);
         if (!decoded) return;
-        std::lock_guard<std::mutex> lock{mutex};
+        std::lock_guard<std::mutex> lock{stateMutex};
         latest = std::move(decoded);
     });
 
     log.info(std::string{"connecting to "} + kServerUri);
     transport.connect(kServerUri);
     std::thread network([&transport] { transport.run(); });
+
+    std::optional<kfc::model::Color> myColor = awaitJoin(join);
+    if (!myColor) {
+        transport.stop();
+        network.join();
+        return 1;
+    }
 
     Img boardImage;
     boardImage.read(kBoardImagePath, {kBoardDisplaySize, kBoardDisplaySize},
@@ -126,9 +180,8 @@ int main() {
                                   boardImage.get_mat().rows};
     kfc::view::Window window{kWindowTitle};
 
-    // Built lazily: the renderer once the board's dimensions are known from
-    // the first snapshot, and the controller once the assigned colour is also
-    // known (the two can arrive in either order over the wire).
+    // Built lazily once the board's dimensions are known from the first
+    // snapshot; myColor is already in hand by the time we get here.
     std::optional<kfc::view::SpriteLibrary> sprites;
     std::optional<kfc::view::Renderer> renderer;
     std::optional<kfc::model::Board> board;
@@ -137,42 +190,33 @@ int main() {
     Clock::time_point start = Clock::now();
     while (true) {
         std::optional<kfc::product::GameStateView> current;
-        std::optional<kfc::model::Color> color;
         {
-            std::lock_guard<std::mutex> lock{mutex};
+            std::lock_guard<std::mutex> lock{stateMutex};
             current = latest;
-            color = myColor;
         }
 
         if (current) {
-            kfc::view::BoardGeometry geometry{
-                boardImage.get_mat().cols, boardImage.get_mat().rows,
-                current->boardWidth, current->boardHeight,
-                layout.boardOrigin()};
-
             if (!renderer) {
+                kfc::view::BoardGeometry geometry{
+                    boardImage.get_mat().cols, boardImage.get_mat().rows,
+                    current->boardWidth, current->boardHeight,
+                    layout.boardOrigin()};
                 sprites.emplace(kPiecesRoot, geometry.cellWidth(),
                                 geometry.cellHeight());
                 renderer.emplace(kBoardImagePath, *sprites, geometry, layout);
-            }
-            if (!controller && color) {
                 board.emplace(current->boardWidth, current->boardHeight);
-                controller.emplace(
-                    kfc::app::makeController(*board, commands, geometry, color));
+                controller.emplace(kfc::app::makeController(*board, commands,
+                                                            geometry, myColor));
             }
-            if (board) syncBoard(*board, current->pieces);
+            syncBoard(*board, current->pieces);
 
-            if (controller) {
-                for (const kfc::view::MouseEvent& event :
-                    window.takeMouseEvents()) {
-                    dispatch(event, *controller);
-                }
+            for (const kfc::view::MouseEvent& event : window.takeMouseEvents()) {
+                dispatch(event, *controller);
             }
 
-            std::optional<kfc::model::Position> selection =
-                controller ? controller->selection() : std::nullopt;
             window.show(renderer->render(
-                kfc::view::buildSnapshot(std::move(*current), selection, {}),
+                kfc::view::buildSnapshot(std::move(*current),
+                                         controller->selection(), {}),
                 elapsedMsSince(start)));
         }
 
