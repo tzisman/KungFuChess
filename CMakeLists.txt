@@ -29,10 +29,10 @@ target_link_libraries(kfc_img PUBLIC ${OpenCV_LIBS})
 # defines), so the pure logic library kfc stays free of any networking dependency
 # and consumers link only against the future net/transport.hpp interface.
 add_library(kfc_net
-    net/websocketpp_transport.cpp
+    shared/net/websocketpp_transport.cpp
 )
 target_include_directories(kfc_net
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/shared
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/asio
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/websocketpp
@@ -49,50 +49,54 @@ endif()
 
 # Layer-neutral utilities shared by the server and client composition roots.
 add_library(kfc_common
-    common/logger.cpp
+    shared/common/logger.cpp
 )
-target_include_directories(kfc_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(kfc_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/shared)
 
 # All production sources across the layers, shared by the app and the tests.
 add_library(kfc
-    model/position.cpp
-    model/geometry.cpp
-    model/piece.cpp
-    model/piece_cost.cpp
-    model/board.cpp
-    rules/piece_rules.cpp
-    rules/rule_engine.cpp
-    realtime/motion.cpp
-    realtime/real_time_arbiter.cpp
-    engine/game_engine.cpp
-    product/score_board.cpp
-    product/move_log.cpp
-    product/game_state_view.cpp
-    input/board_mapper.cpp
-    input/controller.cpp
-    view/board_geometry.cpp
-    view/panel_layout.cpp
-    view/game_snapshot.cpp
-    io/piece_codec.cpp
-    io/piece_config.cpp
-    io/board_parser.cpp
-    io/board_printer.cpp
-    io/move_notation.cpp
+    logic/model/position.cpp
+    logic/model/geometry.cpp
+    logic/model/piece.cpp
+    logic/model/piece_cost.cpp
+    logic/model/board.cpp
+    logic/rules/piece_rules.cpp
+    logic/rules/rule_engine.cpp
+    logic/realtime/motion.cpp
+    logic/realtime/real_time_arbiter.cpp
+    logic/engine/game_engine.cpp
+    logic/product/score_board.cpp
+    logic/product/move_log.cpp
+    logic/product/game_state_view.cpp
+    client/input/board_mapper.cpp
+    client/input/controller.cpp
+    client/view/board_geometry.cpp
+    client/view/panel_layout.cpp
+    client/view/game_snapshot.cpp
+    logic/io/piece_codec.cpp
+    logic/io/piece_config.cpp
+    logic/io/board_parser.cpp
+    logic/io/board_printer.cpp
+    logic/io/move_notation.cpp
     texttests/script_parser.cpp
     texttests/script_runner.cpp
 )
-target_include_directories(kfc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(kfc PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/logic
+    ${CMAKE_CURRENT_SOURCE_DIR}/client)
 target_include_directories(kfc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 
 # Wire protocol shared by server and client: the message types plus their JSON
 # encoding. It depends only on the logic library and the vendored JSON header;
 # it knows nothing of sockets (net) or display (view), so both sides link it.
 add_library(kfc_protocol
-    protocol/json_codec.cpp
-    protocol/position_codec.cpp
-    protocol/wire_snapshot.cpp
+    shared/protocol/json_codec.cpp
+    shared/protocol/position_codec.cpp
+    shared/protocol/wire_snapshot.cpp
 )
 target_link_libraries(kfc_protocol PUBLIC kfc)
+target_include_directories(kfc_protocol PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/shared)
 target_include_directories(kfc_protocol PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 
 # Composition root: reads a VPL script on stdin and prints board output.
@@ -103,9 +107,9 @@ target_link_libraries(kungfu_chess PRIVATE kfc)
 # tested, and so that its dependency on the image backend stays visible here
 # instead of leaking into the logic library.
 add_library(kfc_view
-    view/sprite_library.cpp
-    view/renderer.cpp
-    view/window.cpp
+    client/view/sprite_library.cpp
+    client/view/renderer.cpp
+    client/view/window.cpp
 )
 target_link_libraries(kfc_view PUBLIC kfc kfc_img)
 

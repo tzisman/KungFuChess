@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The project is currently undergoing a **major refactoring of the entire folder/directory structure**, restructuring the codebase around explicit **design patterns** and the strict layer separation described below. Expect files and directories to be reorganized; when adding or moving code, follow the intended architecture and design-pattern conventions rather than the previous layout. The sections below describe the **intended** architecture and rules the implementation must follow.
 
-The target layout (see **Project Structure** below) is now the sole layout: all code lives in the per-layer modules at the repository root, mirrored by `tests/`. The legacy `App/` and `Business Logic/` directories have been fully migrated and removed.
+The target layout (see **Project Structure** below) is now the sole layout: the source is grouped into four top-level umbrellas that mirror the architectural layers — `logic/` (Business Logic), `client/` (GUI), `server/` (Server), and `shared/` (the networking contract both sides depend on) — with `tests/` mirroring them. The legacy `App/` and `Business Logic/` directories have been fully migrated and removed.
 
 ## Game Overview
 
@@ -34,55 +34,87 @@ A non-functional/aspirational goal is scalability toward millions of concurrent 
 
 The codebase is being migrated to the layout below. The source modules live at the repository root, each mapping onto one of the architectural layers; `tests/` mirrors them. Add new code to the module that matches its responsibility — never widen a module's job to avoid creating the right one.
 
+The source is grouped into four top-level umbrellas that mirror the architectural
+layers — `logic/` (Business Logic), `client/` (GUI), `server/` (Server), and
+`shared/` (the networking contract both sides depend on). Every `#include` uses
+the module-prefixed form (`"model/board.hpp"`, `"protocol/messages.hpp"`); the
+umbrella directories are on the include path, so the prefix names the module, not
+the umbrella.
+
 ```
-model/                # Business Logic — pure domain data & state
-  position            # a board coordinate
-  piece               # piece identity (type, color, name)
-  piece_cost          # what a piece is worth to whoever captures it
-  board               # the grid of pieces + safe accessors
-  game_state          # authoritative game state + game clock (no orchestration)
-rules/                # Business Logic — the rules of the game
-  piece_rules         # per-type movement/legality rules
-  rule_engine         # orchestrates the rules into a legality decision
-realtime/             # Business Logic — the real-time / simultaneous mechanics
-  motion              # travel time, cooldown, jump durations
-  real_time_arbiter   # pending moves/jumps, the clock, arrival resolution
-bus/                  # Business Logic — messaging infrastructure (layer-neutral)
-  event_bus           # generic type-indexed publish/subscribe bus
-engine/               # Business Logic — top-level coordination
-  game_engine         # drives state + rules + realtime; the logic entry point
-                      # and the Subject that publishes what happened to the bus
-  game_events         # the game's event types (Action/Capture/GameOver)
-product/              # Business Logic — product features built on game events
-  score_board         # subscriber: each player's score
-  move_log            # subscriber: each player's actions, as records
-input/                # GUI (input side) — no game rules
-  board_mapper        # pixel <-> cell mapping (display-coupled)
-  controller          # turns raw input into engine commands
-io/                   # serialization — board text in/out (not display, not rules)
-  board_parser        # text -> board + commands
-  board_printer       # board -> text
-  move_notation       # a logged action -> text (square names, clock)
-view/                 # GUI (output side) — display only
-  renderer            # renders board state
-  image_view          # graphical view
-  board_geometry      # cell <-> pixel, and where the board sits on the canvas
-  panel_layout        # where the board and the side panels sit
-texttests/            # scripted end-to-end test harness
-  script_parser
-  script_runner
-main.cpp              # composition root wiring the layers together
+logic/                  # Business Logic — zero dependency on display or networking
+  model/                # pure domain data & state
+    position            # a board coordinate
+    piece               # piece identity (type, color, name)
+    piece_cost          # what a piece is worth to whoever captures it
+    board               # the grid of pieces + safe accessors
+    game_state          # authoritative game state + game clock (no orchestration)
+  rules/                # the rules of the game
+    piece_rules         # per-type movement/legality rules
+    rule_engine         # orchestrates the rules into a legality decision
+  realtime/             # the real-time / simultaneous mechanics
+    motion              # travel time, cooldown, jump durations
+    real_time_arbiter   # pending moves/jumps, the clock, arrival resolution
+  bus/                  # messaging infrastructure (layer-neutral)
+    event_bus           # generic type-indexed publish/subscribe bus
+  engine/               # top-level coordination
+    game_engine         # drives state + rules + realtime; the logic entry point
+                        # and the Subject that publishes what happened to the bus
+    game_events         # the game's event types (Action/Capture/GameOver)
+  product/              # product features built on game events
+    score_board         # subscriber: each player's score
+    move_log            # subscriber: each player's actions, as records
+    game_state_view     # subscriber: renderable snapshot of the game
+  io/                   # serialization — board text in/out (not display, not rules)
+    board_parser        # text -> board + commands
+    board_printer       # board -> text
+    move_notation       # a logged action -> text (square names, clock)
+    piece_codec         # piece <-> letter/color encoding
+    piece_config        # piece-type table (letters, costs, motion)
+client/                 # GUI — display & input only, no game rules
+  input/                # GUI (input side)
+    board_mapper        # pixel <-> cell mapping (display-coupled)
+    controller          # turns raw input into engine commands
+    command_sink        # where a controller sends commands (engine or network)
+  view/                 # GUI (output side)
+    renderer            # renders board state
+    window              # the graphical window
+    sprite_library      # piece images
+    board_geometry      # cell <-> pixel, and where the board sits on the canvas
+    panel_layout        # where the board and the side panels sit
+  app/                  # composition helpers shared by the GUI/client roots
+server/                 # Server — authoritative coordination between players
+  server_app            # accepts connections, drives sessions
+  game_session          # one game's server-side state & clients
+  command_queue         # queued player intents
+  player_names          # per-connection player identity
+shared/                 # networking contract shared by client and server
+  protocol/             # wire messages + their JSON encoding (depends on logic only)
+    messages  json_codec  position_codec  wire_snapshot
+  net/                  # transport interface + websocketpp implementation
+    transport  websocketpp_transport
+  common/               # layer-neutral utilities (logger)
+texttests/              # scripted end-to-end test harness (script_parser, script_runner)
+images/                 # OpenCV image backend, quarantined from the logic library
+main.cpp                # text-pipeline composition root
+main_gui.cpp            # offline GUI composition root
+main_server.cpp         # server composition root
+main_client.cpp         # networked-client composition root
 
 tests/
-  unit/               # Business Logic + seams, each unit tested in isolation
+  unit/                 # Business Logic + seams, each unit tested in isolation
     test_position  test_board  test_piece_rules  test_rule_engine
     test_real_time_arbiter  test_event_bus  test_game_engine  test_board_mapper
-    test_controller  test_board_parser  test_board_printer
-    test_piece_cost  test_score_board  test_move_log  test_move_notation
-    test_panel_layout
+    test_controller  test_board_parser  test_board_printer  test_piece_cost
+    test_score_board  test_move_log  test_move_notation  test_panel_layout
+    test_protocol  test_wire_snapshot  test_server_app  test_game_session ...
 ```
 
-Layer mapping: `model` + `rules` + `realtime` + `bus` + `engine` + `product` are **Business Logic**; `input` + `view` are the **GUI**. `io` is a serialization boundary, not a rules or display layer.
+Layer mapping: everything under `logic/` is **Business Logic**; `client/` is the
+**GUI**; `server/` is the **Server**. `shared/` holds the networking contract both
+the client and server link — `protocol` is a serialization boundary (it depends on
+`logic` only, never on sockets or display), `net` is the transport, `common` is
+layer-neutral. Business Logic must never `#include` from `client/` or `shared/`.
 
 Product features (score, moves log) observe the engine rather than being called by it: `GameEngine` publishes `ActionEvent` / `CaptureEvent` / `GameOverEvent` to a generic `EventBus`, and knows nothing of who is listening. Subscribers register through `engine.events()` and each declares what it cares about via its own `subscribeTo(bus)`. A feature that accumulates from game events belongs in `product/` as a subscriber — never as a hook inside the rules, and never in the GUI. The bus is deliberately ignorant of any concrete event type, so it depends on no game layer: this is the seam through which the future Server layer will publish and subscribe without the logic ever hearing of it.
 
