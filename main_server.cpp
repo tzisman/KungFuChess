@@ -7,6 +7,7 @@
 #include "common/logger.hpp"
 #include "io/board_parser.hpp"
 #include "net/websocketpp_transport.hpp"
+#include "server/command_queue.hpp"
 #include "server/game_session.hpp"
 #include "server/server_app.hpp"
 
@@ -30,8 +31,9 @@ int main() {
     kfc::io::ParsedInput parsed = kfc::io::parseInput(startBoard);
 
     kfc::net::WebsocketppServer transport;
-    kfc::server::ServerApp app{transport, log};
-    kfc::server::GameSession game{transport, std::move(parsed.board)};
+    kfc::server::CommandQueue commands;
+    kfc::server::ServerApp app{transport, log, commands};
+    kfc::server::GameSession game{transport, commands, std::move(parsed.board)};
 
     transport.listen(kPort);
     log.info("listening on port " + std::to_string(kPort));

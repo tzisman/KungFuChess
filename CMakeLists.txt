@@ -89,6 +89,7 @@ target_include_directories(kfc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 # it knows nothing of sockets (net) or display (view), so both sides link it.
 add_library(kfc_protocol
     protocol/json_codec.cpp
+    protocol/position_codec.cpp
     protocol/wire_snapshot.cpp
 )
 target_link_libraries(kfc_protocol PUBLIC kfc)
@@ -118,6 +119,7 @@ target_link_libraries(kungfu_chess_gui PRIVATE kfc_view)
 # interface (not the websocketpp implementation), the shared protocol and the
 # logger, so its logic is unit-testable with a fake transport.
 add_library(kfc_server
+    server/command_queue.cpp
     server/server_app.cpp
     server/game_session.cpp
 )
@@ -161,6 +163,7 @@ add_executable(unit_tests
     tests/unit/test_script_parser.cpp
     tests/unit/test_protocol.cpp
     tests/unit/test_wire_snapshot.cpp
+    tests/unit/test_command_queue.cpp
     tests/unit/test_server_app.cpp
     tests/unit/test_game_session.cpp
 )

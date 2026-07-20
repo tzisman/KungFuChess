@@ -11,6 +11,7 @@
 #include "model/piece.hpp"
 #include "model/position.hpp"
 #include "product/move_log.hpp"
+#include "protocol/position_codec.hpp"
 
 namespace kfc::protocol {
 namespace {
@@ -30,9 +31,6 @@ constexpr char kStateKey[] = "state";
 constexpr char kMovingToKey[] = "movingTo";
 constexpr char kProgressKey[] = "progress";
 constexpr char kElapsedKey[] = "elapsedMs";
-
-constexpr char kRowKey[] = "row";
-constexpr char kColKey[] = "col";
 
 constexpr char kNameKey[] = "name";
 constexpr char kScoreKey[] = "score";
@@ -114,19 +112,6 @@ std::optional<T> firstCharMapped(const json& object, const char* key,
     std::optional<std::string> text = stringField(object, key);
     if (!text || text->size() != 1) return std::nullopt;
     return from((*text)[0]);
-}
-
-// --- position ---
-
-json encodePosition(model::Position cell) {
-    return {{kRowKey, cell.row}, {kColKey, cell.col}};
-}
-std::optional<model::Position> decodePosition(const json& value) {
-    if (!value.is_object()) return std::nullopt;
-    std::optional<int> row = intField(value, kRowKey);
-    std::optional<int> col = intField(value, kColKey);
-    if (!row || !col) return std::nullopt;
-    return model::Position{*row, *col};
 }
 
 // --- piece ---

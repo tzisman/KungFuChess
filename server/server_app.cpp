@@ -8,8 +8,9 @@
 
 namespace kfc::server {
 
-ServerApp::ServerApp(net::ServerTransport& transport, common::Logger& log)
-    : transport_(transport), log_(log) {
+ServerApp::ServerApp(net::ServerTransport& transport, common::Logger& log,
+                     CommandQueue& commands)
+    : transport_(transport), log_(log), commands_(commands) {
     transport_.onOpen([this](net::ConnectionId id) { onOpen(id); });
     transport_.onMessage([this](net::ConnectionId id, const std::string& text) {
         onMessage(id, text);
@@ -31,6 +32,14 @@ void ServerApp::onMessage(net::ConnectionId id, const std::string& text) {
         handleJoin(id, join->name);
         return;
     }
+    if (const auto* move = std::get_if<protocol::MoveIntent>(&*message)) {
+        handleMove(id, *move);
+        return;
+    }
+    if (const auto* jump = std::get_if<protocol::JumpIntent>(&*message)) {
+        handleJump(id, *jump);
+        return;
+    }
     log_.info("connection " + std::to_string(id) + " sent an unexpected message");
 }
 
@@ -50,6 +59,26 @@ void ServerApp::handleJoin(net::ConnectionId id, const std::string& name) {
     log_.info(name + " joined as " + model::nameOf(*color) + " (connection " +
               std::to_string(id) + ")");
     transport_.send(id, protocol::encode(protocol::Assigned{*color}));
+}
+
+void ServerApp::handleMove(net::ConnectionId id,
+                           const protocol::MoveIntent& intent) {
+    std::optional<model::Color> color = colorOf(id);
+    if (!color) return;
+    commands_.push(MoveCommand{*color, intent.from, intent.to});
+}
+
+void ServerApp::handleJump(net::ConnectionId id,
+                           const protocol::JumpIntent& intent) {
+    std::optional<model::Color> color = colorOf(id);
+    if (!color) return;
+    commands_.push(JumpCommand{*color, intent.cell});
+}
+
+std::optional<model::Color> ServerApp::colorOf(net::ConnectionId id) const {
+    auto it = sessions_.find(id);
+    if (it == sessions_.end()) return std::nullopt;
+    return it->second.color;
 }
 
 void ServerApp::onClose(net::ConnectionId id) {

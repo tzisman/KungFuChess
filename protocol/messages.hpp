@@ -4,6 +4,7 @@
 #include <variant>
 
 #include "model/piece.hpp"
+#include "model/position.hpp"
 
 namespace kfc::protocol {
 
@@ -22,8 +23,20 @@ struct Rejected {
     std::string reason;
 };
 
+// Client -> Server: move the piece standing at `from` toward `to`. The server
+// resolves whose piece it actually is; the client only states the intent.
+struct MoveIntent {
+    model::Position from;
+    model::Position to;
+};
+
+// Client -> Server: jump the piece standing at `cell` in place.
+struct JumpIntent {
+    model::Position cell;
+};
+
 // One of anything that can cross the wire. Decoding yields whichever it is; the
 // receiver dispatches on the alternative.
-using Message = std::variant<JoinRequest, Assigned, Rejected>;
+using Message = std::variant<JoinRequest, Assigned, Rejected, MoveIntent, JumpIntent>;
 
 }
