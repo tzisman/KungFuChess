@@ -8,9 +8,14 @@
 
 namespace kfc::server {
 
+namespace {
+constexpr char kInvalidCredentialsReason[] = "invalid_credentials";
+constexpr char kUsernameTakenReason[] = "username_taken";
+}  // namespace
+
 ServerApp::ServerApp(net::ServerTransport& transport, common::Logger& log,
-                     CommandQueue& commands, PlayerNames& names)
-    : transport_(transport), log_(log), commands_(commands), names_(names) {
+                     CommandQueue& commands, PlayerNames& names, UserStore& users)
+    : transport_(transport), log_(log), commands_(commands), names_(names), users_(users) {
     transport_.onOpen([this](net::ConnectionId id) { onOpen(id); });
     transport_.onMessage([this](net::ConnectionId id, const std::string& text) {
         onMessage(id, text);
@@ -28,8 +33,12 @@ void ServerApp::onMessage(net::ConnectionId id, const std::string& text) {
         log_.info("connection " + std::to_string(id) + " sent malformed input");
         return;
     }
-    if (const auto* join = std::get_if<protocol::JoinRequest>(&*message)) {
-        handleJoin(id, join->name);
+    if (const auto* registerRequest = std::get_if<protocol::RegisterRequest>(&*message)) {
+        handleRegister(id, *registerRequest);
+        return;
+    }
+    if (const auto* login = std::get_if<protocol::LoginRequest>(&*message)) {
+        handleLogin(id, *login);
         return;
     }
     if (const auto* move = std::get_if<protocol::MoveIntent>(&*message)) {
@@ -43,21 +52,39 @@ void ServerApp::onMessage(net::ConnectionId id, const std::string& text) {
     log_.info("connection " + std::to_string(id) + " sent an unexpected message");
 }
 
-void ServerApp::handleJoin(net::ConnectionId id, const std::string& name) {
+void ServerApp::handleRegister(net::ConnectionId id, const protocol::RegisterRequest& request) {
+    if (users_.registerUser(request.username, request.password)) {
+        log_.info(request.username + " registered (connection " + std::to_string(id) + ")");
+        transport_.send(id, protocol::encode(protocol::Registered{}));
+        return;
+    }
+    log_.info(request.username + " registration rejected: username taken (connection " +
+              std::to_string(id) + ")");
+    transport_.send(id, protocol::encode(protocol::AuthRejected{kUsernameTakenReason}));
+}
+
+void ServerApp::handleLogin(net::ConnectionId id, const protocol::LoginRequest& request) {
     if (sessions_.count(id)) {
-        log_.info("connection " + std::to_string(id) + " already joined");
+        log_.info("connection " + std::to_string(id) + " already logged in");
+        return;
+    }
+    std::optional<UserRecord> user = users_.authenticate(request.username, request.password);
+    if (!user) {
+        log_.info(request.username + " login rejected: invalid credentials (connection " +
+                  std::to_string(id) + ")");
+        transport_.send(id, protocol::encode(protocol::AuthRejected{kInvalidCredentialsReason}));
         return;
     }
     std::optional<model::Color> color = freeColor();
     if (!color) {
-        log_.info(name + " (connection " + std::to_string(id) +
+        log_.info(user->username + " (connection " + std::to_string(id) +
                   ") rejected: game full");
         transport_.send(id, protocol::encode(protocol::Rejected{"full"}));
         return;
     }
-    sessions_.emplace(id, Session{id, *color, name});
-    names_.set(*color, name);
-    log_.info(name + " joined as " + model::nameOf(*color) + " (connection " +
+    sessions_.emplace(id, Session{id, user->username, *color});
+    names_.set(*color, user->username);
+    log_.info(user->username + " logged in as " + model::nameOf(*color) + " (connection " +
               std::to_string(id) + ")");
     transport_.send(id, protocol::encode(protocol::Assigned{*color}));
 }
@@ -88,7 +115,7 @@ void ServerApp::onClose(net::ConnectionId id) {
         log_.info("connection " + std::to_string(id) + " closed");
         return;
     }
-    log_.info(it->second.name + " (" + model::nameOf(it->second.color) +
+    log_.info(it->second.username + " (" + model::nameOf(it->second.color) +
               ") left; colour freed");
     sessions_.erase(it);
 }

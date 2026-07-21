@@ -8,9 +8,25 @@
 
 namespace kfc::protocol {
 
-// Client -> Server: a player asks to join, giving the name to show.
-struct JoinRequest {
-    std::string name;
+// Client -> Server: create an account with this username and password.
+struct RegisterRequest {
+    std::string username;
+    std::string password;
+};
+
+// Client -> Server: authenticate an existing account.
+struct LoginRequest {
+    std::string username;
+    std::string password;
+};
+
+// Server -> Client: the account was created.
+struct Registered {};
+
+// Server -> Client: registration or login failed, and why (e.g. bad
+// credentials, or a username already taken).
+struct AuthRejected {
+    std::string reason;
 };
 
 // Server -> Client: the player is in; this is the colour they play.
@@ -37,6 +53,7 @@ struct JumpIntent {
 
 // One of anything that can cross the wire. Decoding yields whichever it is; the
 // receiver dispatches on the alternative.
-using Message = std::variant<JoinRequest, Assigned, Rejected, MoveIntent, JumpIntent>;
+using Message = std::variant<RegisterRequest, LoginRequest, Registered, AuthRejected,
+                              Assigned, Rejected, MoveIntent, JumpIntent>;
 
 }

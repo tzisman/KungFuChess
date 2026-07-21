@@ -55,6 +55,9 @@ cmake-build-*/
 Testing/
 *.log
 
+# Runtime data (SQLite account store created by the server)
+kungfu_chess.db
+
 # OS files
 Thumbs.db
 .DS_Store

@@ -141,10 +141,20 @@ add_library(kfc_server
 )
 target_link_libraries(kfc_server PUBLIC kfc_protocol kfc_common)
 
+# Concrete UserStore implementation, backed by SQLite. Quarantined exactly like
+# kfc_net for websocketpp: only this target's own source sees sqlite3.h, and
+# kfc_server itself never links sqlite3 or this target — only the server
+# executable and the tests link the concrete implementation.
+add_library(kfc_sqlite_store
+    server/sqlite_user_store.cpp
+)
+target_link_libraries(kfc_sqlite_store PUBLIC kfc_server)
+target_link_libraries(kfc_sqlite_store PRIVATE sqlite3)
+
 # Composition root of the server: joins the server logic to the concrete
 # websocketpp transport. Links the networking layer, never the display.
 add_executable(kungfu_chess_server main_server.cpp)
-target_link_libraries(kungfu_chess_server PRIVATE kfc_server kfc_net)
+target_link_libraries(kungfu_chess_server PRIVATE kfc_server kfc_net kfc_sqlite_store)
 
 # Composition root of the networked client: a display-only window fed by the
 # server's snapshots. It links the view, the wire protocol and the transport,
@@ -186,7 +196,8 @@ add_executable(unit_tests
     tests/unit/test_game_session.cpp
     tests/unit/test_elo.cpp
     tests/unit/test_password_hash.cpp
+    tests/unit/test_sqlite_user_store.cpp
 )
-target_link_libraries(unit_tests PRIVATE doctest kfc kfc_protocol kfc_server)
+target_link_libraries(unit_tests PRIVATE doctest kfc kfc_protocol kfc_server kfc_sqlite_store)
 
 add_test(NAME unit_tests COMMAND unit_tests)

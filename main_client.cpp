@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <mutex>
 #include <optional>
@@ -33,10 +34,9 @@ constexpr char kServerUri[] = "ws://127.0.0.1:9002";
 constexpr char kBoardImagePath[] = "images/board.png";
 constexpr char kPiecesRoot[] = "images/pieces3";
 constexpr char kWindowTitle[] = "KungFuChess (client)";
-constexpr char kDefaultPlayerName[] = "Player";
 constexpr int kBoardDisplaySize = 435;
 constexpr int kFrameDelayMs = 30;
-constexpr int kJoinPollMs = 20;
+constexpr int kAuthPollMs = 20;
 constexpr int kQuitKey = 27;  // Esc
 
 using Clock = std::chrono::steady_clock;
@@ -102,89 +102,179 @@ std::vector<kfc::model::Position> legalDestinationsFrom(
     return {destinations.begin(), destinations.end()};
 }
 
-std::string askForName() {
+struct Credentials {
+    std::string username;
+    std::string password;
+};
+
+std::string askNonEmptyAscii(const std::string& prompt) {
     while (true) {
-        std::cout << "Enter your name (English letters/digits only): ";
-        std::string name;
-        std::getline(std::cin, name);
-        if (name.empty()) return kDefaultPlayerName;
-        if (isPlainAscii(name)) return name;
+        std::cout << prompt;
+        std::string value;
+        std::getline(std::cin, value);
+        if (!value.empty() && isPlainAscii(value)) return value;
         std::cout << "Please use plain English letters and digits.\n";
     }
 }
 
-// What joining resolved to, filled in from the network thread's onMessage/
-// onClose handlers and read by the main thread's wait loop below. Only one of
-// the three ever becomes set.
-struct JoinOutcome {
+Credentials askForCredentials() {
+    std::string username = askNonEmptyAscii("Username (English letters/digits only): ");
+    std::cout << "Password: ";
+    std::string password;
+    std::getline(std::cin, password);
+    return {username, password};
+}
+
+bool askWantsToRegister() {
+    while (true) {
+        std::cout << "Register a new account or log in to an existing one? (r/l): ";
+        std::string choice;
+        std::getline(std::cin, choice);
+        if (choice == "r" || choice == "R") return true;
+        if (choice == "l" || choice == "L") return false;
+    }
+}
+
+// Filled in from the network thread's onMessage/onClose handlers as the
+// server answers a register or login attempt, and read by the main thread's
+// wait loops below. Reset between attempts so a retry never sees a stale
+// answer from a previous one.
+struct AuthOutcome {
     std::mutex mutex;
     std::optional<kfc::model::Color> color;
-    std::optional<std::string> rejection;
+    std::optional<std::string> gameRejection;
+    std::optional<std::string> authRejection;
+    bool registered = false;
     bool closed = false;
 };
 
-// Blocks the caller until the server has answered the join request one way or
-// another, so the window never opens on a rejected or dropped connection. A
-// short poll is enough: this only runs once, before the game itself starts.
-std::optional<kfc::model::Color> awaitJoin(JoinOutcome& outcome) {
+void resetAuthOutcome(AuthOutcome& outcome) {
+    std::lock_guard<std::mutex> lock{outcome.mutex};
+    outcome.color.reset();
+    outcome.gameRejection.reset();
+    outcome.authRejection.reset();
+    outcome.registered = false;
+}
+
+// Blocks until the server confirms registration, rejects it (username taken),
+// or the connection drops. A dropped connection has nothing left to retry
+// against, so it ends the process; a rejection returns false so the caller
+// can ask for different credentials.
+bool awaitRegistration(AuthOutcome& outcome) {
+    while (true) {
+        {
+            std::lock_guard<std::mutex> lock{outcome.mutex};
+            if (outcome.registered) return true;
+            if (outcome.authRejection) {
+                std::cout << "Registration rejected: " << *outcome.authRejection << "\n";
+                return false;
+            }
+            if (outcome.closed) {
+                std::cerr << "Connection closed before registering\n";
+                std::exit(1);
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(kAuthPollMs));
+    }
+}
+
+// Blocks until the server assigns a colour, rejects the login (bad
+// credentials), rejects the game as full, or the connection drops. A bad
+// login returns nullopt so the caller can ask again; a full game or a
+// dropped connection has nothing left to retry against, so those end the
+// process instead.
+std::optional<kfc::model::Color> awaitLogin(AuthOutcome& outcome) {
     while (true) {
         {
             std::lock_guard<std::mutex> lock{outcome.mutex};
             if (outcome.color) return outcome.color;
-            if (outcome.rejection) {
-                std::cerr << "Server rejected join: " << *outcome.rejection << "\n";
+            if (outcome.gameRejection) {
+                std::cerr << "Server rejected login: " << *outcome.gameRejection << "\n";
+                std::exit(1);
+            }
+            if (outcome.authRejection) {
+                std::cout << "Login rejected: " << *outcome.authRejection << "\n";
                 return std::nullopt;
             }
             if (outcome.closed) {
-                std::cerr << "Connection closed before joining\n";
-                return std::nullopt;
+                std::cerr << "Connection closed before logging in\n";
+                std::exit(1);
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(kJoinPollMs));
+        std::this_thread::sleep_for(std::chrono::milliseconds(kAuthPollMs));
+    }
+}
+
+// Drives the terminal register/login prompts until the server assigns a
+// colour. Registering succeeds into an automatic login attempt with the same
+// credentials; either one being rejected loops back to ask again.
+kfc::model::Color askForCredentialsUntilLoggedIn(kfc::net::WebsocketppClient& transport,
+                                                  kfc::common::Logger& log,
+                                                  AuthOutcome& outcome) {
+    while (true) {
+        bool wantsRegister = askWantsToRegister();
+        Credentials creds = askForCredentials();
+
+        if (wantsRegister) {
+            resetAuthOutcome(outcome);
+            log.info("registering as " + creds.username);
+            transport.send(kfc::protocol::encode(kfc::protocol::Message{
+                kfc::protocol::RegisterRequest{creds.username, creds.password}}));
+            if (!awaitRegistration(outcome)) continue;
+            std::cout << "Registered. Logging in...\n";
+        }
+
+        resetAuthOutcome(outcome);
+        log.info("logging in as " + creds.username);
+        transport.send(kfc::protocol::encode(
+            kfc::protocol::Message{kfc::protocol::LoginRequest{creds.username, creds.password}}));
+        if (std::optional<kfc::model::Color> color = awaitLogin(outcome)) return *color;
     }
 }
 
 }  // namespace
 
-// Step 11 client: registers by name in the terminal and opens the game window
-// only once the server has assigned a colour, completing the join flow from
-// step 2 of the plan. From there it plays exactly as step 10 left it: no local
-// engine, every click becomes a MoveIntent/JumpIntent, every frame drawn comes
-// from the server's own broadcast snapshot. The transport's io loop runs on a
-// background thread; the main thread owns OpenCV and the shared state it reads
-// is guarded by a mutex throughout.
+// Step 3 client: logs in with an account (username+password, registering
+// first if needed) in the terminal, and opens the game window only once the
+// server has assigned a colour. From there it plays exactly as step 10 left
+// it: no local engine, every click becomes a MoveIntent/JumpIntent, every
+// frame drawn comes from the server's own broadcast snapshot. The transport's
+// io loop runs on a background thread; the main thread owns OpenCV and the
+// shared state it reads is guarded by a mutex throughout.
 int main() {
     kfc::common::Logger log{"CLIENT"};
-    std::string name = askForName();
 
-    JoinOutcome join;
+    AuthOutcome outcome;
     std::mutex stateMutex;
     std::optional<kfc::product::GameStateView> latest;
 
     kfc::net::WebsocketppClient transport;
     kfc::input::NetworkCommandSink commands{transport};
 
-    transport.onOpen([&log, &transport, &name]() {
-        log.info("connected -> joining as " + name);
-        transport.send(kfc::protocol::encode(
-            kfc::protocol::Message{kfc::protocol::JoinRequest{name}}));
-    });
-    transport.onClose([&log, &join]() {
+    transport.onOpen([&log]() { log.info("connected"); });
+    transport.onClose([&log, &outcome]() {
         log.info("closed");
-        std::lock_guard<std::mutex> lock{join.mutex};
-        join.closed = true;
+        std::lock_guard<std::mutex> lock{outcome.mutex};
+        outcome.closed = true;
     });
-    transport.onMessage([&join, &stateMutex, &latest](const std::string& text) {
+    transport.onMessage([&outcome, &stateMutex, &latest](const std::string& text) {
         if (std::optional<kfc::protocol::Message> message =
                 kfc::protocol::decode(text)) {
             if (const auto* assigned =
                     std::get_if<kfc::protocol::Assigned>(&*message)) {
-                std::lock_guard<std::mutex> lock{join.mutex};
-                join.color = assigned->color;
+                std::lock_guard<std::mutex> lock{outcome.mutex};
+                outcome.color = assigned->color;
             } else if (const auto* rejected =
                            std::get_if<kfc::protocol::Rejected>(&*message)) {
-                std::lock_guard<std::mutex> lock{join.mutex};
-                join.rejection = rejected->reason;
+                std::lock_guard<std::mutex> lock{outcome.mutex};
+                outcome.gameRejection = rejected->reason;
+            } else if (std::get_if<kfc::protocol::Registered>(&*message)) {
+                std::lock_guard<std::mutex> lock{outcome.mutex};
+                outcome.registered = true;
+            } else if (const auto* authRejected =
+                           std::get_if<kfc::protocol::AuthRejected>(&*message)) {
+                std::lock_guard<std::mutex> lock{outcome.mutex};
+                outcome.authRejection = authRejected->reason;
             }
             return;
         }
@@ -199,12 +289,7 @@ int main() {
     transport.connect(kServerUri);
     std::thread network([&transport] { transport.run(); });
 
-    std::optional<kfc::model::Color> myColor = awaitJoin(join);
-    if (!myColor) {
-        transport.stop();
-        network.join();
-        return 1;
-    }
+    kfc::model::Color myColor = askForCredentialsUntilLoggedIn(transport, log, outcome);
 
     Img boardImage;
     boardImage.read(kBoardImagePath, {kBoardDisplaySize, kBoardDisplaySize},

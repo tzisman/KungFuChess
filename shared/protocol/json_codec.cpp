@@ -14,14 +14,18 @@ using nlohmann::json;
 
 // Field names are defined once so encode and decode cannot disagree.
 constexpr char kTypeKey[] = "type";
-constexpr char kNameKey[] = "name";
+constexpr char kUsernameKey[] = "username";
+constexpr char kPasswordKey[] = "password";
 constexpr char kColorKey[] = "color";
 constexpr char kReasonKey[] = "reason";
 constexpr char kFromKey[] = "from";
 constexpr char kToKey[] = "to";
 constexpr char kCellKey[] = "cell";
 
-constexpr char kJoinType[] = "join";
+constexpr char kRegisterType[] = "register";
+constexpr char kLoginType[] = "login";
+constexpr char kRegisteredType[] = "registered";
+constexpr char kAuthRejectedType[] = "auth_rejected";
 constexpr char kAssignedType[] = "assigned";
 constexpr char kRejectedType[] = "rejected";
 constexpr char kMoveType[] = "move";
@@ -39,8 +43,21 @@ std::optional<model::Color> decodeColor(const json& value) {
 }
 
 struct EncodeVisitor {
-    json operator()(const JoinRequest& message) const {
-        return {{kTypeKey, kJoinType}, {kNameKey, message.name}};
+    json operator()(const RegisterRequest& message) const {
+        return {{kTypeKey, kRegisterType},
+                {kUsernameKey, message.username},
+                {kPasswordKey, message.password}};
+    }
+    json operator()(const LoginRequest& message) const {
+        return {{kTypeKey, kLoginType},
+                {kUsernameKey, message.username},
+                {kPasswordKey, message.password}};
+    }
+    json operator()(const Registered&) const {
+        return {{kTypeKey, kRegisteredType}};
+    }
+    json operator()(const AuthRejected& message) const {
+        return {{kTypeKey, kAuthRejectedType}, {kReasonKey, message.reason}};
     }
     json operator()(const Assigned& message) const {
         return {{kTypeKey, kAssignedType}, {kColorKey, encodeColor(message.color)}};
@@ -81,9 +98,24 @@ std::optional<Message> decode(const std::string& text) {
     std::optional<std::string> type = stringField(parsed, kTypeKey);
     if (!type) return std::nullopt;
 
-    if (*type == kJoinType) {
-        if (std::optional<std::string> name = stringField(parsed, kNameKey))
-            return Message{JoinRequest{*name}};
+    if (*type == kRegisterType) {
+        std::optional<std::string> username = stringField(parsed, kUsernameKey);
+        std::optional<std::string> password = stringField(parsed, kPasswordKey);
+        if (!username || !password) return std::nullopt;
+        return Message{RegisterRequest{*username, *password}};
+    }
+    if (*type == kLoginType) {
+        std::optional<std::string> username = stringField(parsed, kUsernameKey);
+        std::optional<std::string> password = stringField(parsed, kPasswordKey);
+        if (!username || !password) return std::nullopt;
+        return Message{LoginRequest{*username, *password}};
+    }
+    if (*type == kRegisteredType) {
+        return Message{Registered{}};
+    }
+    if (*type == kAuthRejectedType) {
+        if (std::optional<std::string> reason = stringField(parsed, kReasonKey))
+            return Message{AuthRejected{*reason}};
         return std::nullopt;
     }
     if (*type == kAssignedType) {

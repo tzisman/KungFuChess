@@ -7,13 +7,13 @@
 
 namespace kfc::server {
 
-// One connected player's identity on the server: which socket they are on, which
-// colour they were given, and the name they chose. Later steps add ownership
-// checks and disconnect state around this same identity.
+// One connected player's identity on the server: which socket they are on,
+// the account they logged in as, and which colour they were given. Later
+// steps add ownership checks and disconnect state around this same identity.
 struct Session {
     net::ConnectionId connection;
+    std::string username;
     model::Color color;
-    std::string name;
 };
 
 }

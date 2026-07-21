@@ -11,10 +11,12 @@
 #include "server/game_session.hpp"
 #include "server/player_names.hpp"
 #include "server/server_app.hpp"
+#include "server/sqlite_user_store.hpp"
 
 namespace {
 constexpr std::uint16_t kPort = 9002;
 constexpr char kStartBoardPath[] = "texttests/start.txt";
+constexpr char kUserDbPath[] = "kungfu_chess.db";
 }
 
 // Composition root of the server. It owns the concrete transport, the join logic
@@ -34,7 +36,8 @@ int main() {
     kfc::net::WebsocketppServer transport;
     kfc::server::CommandQueue commands;
     kfc::server::PlayerNames names;
-    kfc::server::ServerApp app{transport, log, commands, names};
+    kfc::server::SqliteUserStore users{kUserDbPath};
+    kfc::server::ServerApp app{transport, log, commands, names, users};
     kfc::server::GameSession game{transport, commands, names,
                                   std::move(parsed.board)};
 
