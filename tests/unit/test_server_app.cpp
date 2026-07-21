@@ -14,7 +14,6 @@
 #include "protocol/json_codec.hpp"
 #include "protocol/messages.hpp"
 #include "server/command_queue.hpp"
-#include "server/player_names.hpp"
 #include "server/server_app.hpp"
 
 using kfc::common::Logger;
@@ -24,7 +23,6 @@ using kfc::net::ConnectionId;
 using kfc::server::CommandQueue;
 using kfc::server::JumpCommand;
 using kfc::server::MoveCommand;
-using kfc::server::PlayerNames;
 using kfc::server::ServerApp;
 using kfc::test::FakeServerTransport;
 using kfc::test::FakeUserStore;
@@ -75,9 +73,8 @@ TEST_CASE("the first player to log in is assigned white") {
     Logger log{"TEST", quiet};
     FakeServerTransport transport;
     CommandQueue commands;
-    PlayerNames names;
     FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
+    ServerApp app{transport, log, commands, users};
 
     joinAs(transport, 1, "Alice");
 
@@ -92,9 +89,8 @@ TEST_CASE("the second player to log in is assigned black") {
     Logger log{"TEST", quiet};
     FakeServerTransport transport;
     CommandQueue commands;
-    PlayerNames names;
     FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
+    ServerApp app{transport, log, commands, users};
 
     joinAs(transport, 1, "Alice");
     joinAs(transport, 2, "Bob");
@@ -110,9 +106,8 @@ TEST_CASE("a third player to log in is rejected as full") {
     Logger log{"TEST", quiet};
     FakeServerTransport transport;
     CommandQueue commands;
-    PlayerNames names;
     FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
+    ServerApp app{transport, log, commands, users};
 
     joinAs(transport, 1, "Alice");
     joinAs(transport, 2, "Bob");
@@ -129,9 +124,8 @@ TEST_CASE("a disconnect frees the colour for the next joiner") {
     Logger log{"TEST", quiet};
     FakeServerTransport transport;
     CommandQueue commands;
-    PlayerNames names;
     FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
+    ServerApp app{transport, log, commands, users};
 
     joinAs(transport, 1, "Alice");  // white
     joinAs(transport, 2, "Bob");    // black
@@ -145,30 +139,13 @@ TEST_CASE("a disconnect frees the colour for the next joiner") {
     CHECK(std::get<Assigned>(*reply).color == Color::kWhite);
 }
 
-TEST_CASE("a logged-in player's username is registered under their colour") {
-    std::ostringstream quiet;
-    Logger log{"TEST", quiet};
-    FakeServerTransport transport;
-    CommandQueue commands;
-    PlayerNames names;
-    FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
-
-    joinAs(transport, 1, "Alice");
-
-    std::optional<std::string> registered = names.get(Color::kWhite);
-    REQUIRE(registered.has_value());
-    CHECK(*registered == "Alice");
-}
-
 TEST_CASE("a logged-in player's move intent is queued tagged with their colour") {
     std::ostringstream quiet;
     Logger log{"TEST", quiet};
     FakeServerTransport transport;
     CommandQueue commands;
-    PlayerNames names;
     FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
+    ServerApp app{transport, log, commands, users};
 
     joinAs(transport, 1, "Alice");  // white
     transport.receive(
@@ -188,9 +165,8 @@ TEST_CASE("a logged-in player's jump intent is queued tagged with their colour")
     Logger log{"TEST", quiet};
     FakeServerTransport transport;
     CommandQueue commands;
-    PlayerNames names;
     FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
+    ServerApp app{transport, log, commands, users};
 
     joinAs(transport, 1, "Alice");  // white
     joinAs(transport, 2, "Bob");    // black
@@ -209,9 +185,8 @@ TEST_CASE("a move intent from a connection that never logged in is dropped") {
     Logger log{"TEST", quiet};
     FakeServerTransport transport;
     CommandQueue commands;
-    PlayerNames names;
     FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
+    ServerApp app{transport, log, commands, users};
 
     transport.connect(1);
     transport.receive(
@@ -225,9 +200,8 @@ TEST_CASE("registering an existing username is rejected") {
     Logger log{"TEST", quiet};
     FakeServerTransport transport;
     CommandQueue commands;
-    PlayerNames names;
     FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
+    ServerApp app{transport, log, commands, users};
 
     transport.connect(1);
     transport.receive(1, registerMessage("Alice"));
@@ -245,9 +219,8 @@ TEST_CASE("logging in with the wrong password is rejected") {
     Logger log{"TEST", quiet};
     FakeServerTransport transport;
     CommandQueue commands;
-    PlayerNames names;
     FakeUserStore users;
-    ServerApp app{transport, log, commands, names, users};
+    ServerApp app{transport, log, commands, users};
 
     transport.connect(1);
     transport.receive(1, registerMessage("Alice"));

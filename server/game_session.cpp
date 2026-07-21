@@ -1,5 +1,6 @@
 #include "server/game_session.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <optional>
 #include <thread>
@@ -24,15 +25,33 @@ int elapsedMsSince(Clock::time_point& last) {
 }
 }  // namespace
 
-GameSession::GameSession(net::ServerTransport& transport, CommandQueue& commands,
-                         PlayerNames& names, model::Board board,
+GameSession::GameSession(net::ServerTransport& transport, model::Board board,
                          realtime::MotionProfiles profiles)
-    : transport_(transport),
-      commands_(commands),
-      names_(names),
-      engine_(std::move(board), std::move(profiles)) {
+    : transport_(transport), engine_(std::move(board), std::move(profiles)) {
     scores_.subscribeTo(engine_.events());
     moveLog_.subscribeTo(engine_.events());
+}
+
+bool GameSession::claimColor(model::Color color, net::ConnectionId id,
+                             std::string username, int rating) {
+    for (const PlayerSlot& player : players_) {
+        if (player.color == color) return false;
+    }
+    players_.push_back(PlayerSlot{color, id, std::move(username), rating});
+    return true;
+}
+
+void GameSession::submit(PlayerCommand command) { commands_.push(std::move(command)); }
+
+bool GameSession::ownsConnection(net::ConnectionId id) const {
+    return colorOf(id).has_value();
+}
+
+std::optional<model::Color> GameSession::colorOf(net::ConnectionId id) const {
+    for (const PlayerSlot& player : players_) {
+        if (player.connection == id) return player.color;
+    }
+    return std::nullopt;
 }
 
 void GameSession::tick(int elapsedMs) {
@@ -77,11 +96,14 @@ void GameSession::broadcastState() {
     product::GameStateView state =
         product::gameStateView(engine_, scores_, moveLog_);
     for (product::PlayerSnapshot& player : state.players) {
-        if (std::optional<std::string> name = names_.get(player.color)) {
-            player.name = *name;
-        }
+        auto it = std::find_if(players_.begin(), players_.end(),
+                               [&](const PlayerSlot& slot) { return slot.color == player.color; });
+        if (it != players_.end()) player.name = it->username;
     }
-    transport_.broadcast(protocol::encodeSnapshot(state));
+    std::string payload = protocol::encodeSnapshot(state);
+    for (const PlayerSlot& player : players_) {
+        transport_.send(player.connection, payload);
+    }
 }
 
 }

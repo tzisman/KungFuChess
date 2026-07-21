@@ -14,8 +14,8 @@ constexpr char kUsernameTakenReason[] = "username_taken";
 }  // namespace
 
 ServerApp::ServerApp(net::ServerTransport& transport, common::Logger& log,
-                     CommandQueue& commands, PlayerNames& names, UserStore& users)
-    : transport_(transport), log_(log), commands_(commands), names_(names), users_(users) {
+                     CommandQueue& commands, UserStore& users)
+    : transport_(transport), log_(log), commands_(commands), users_(users) {
     transport_.onOpen([this](net::ConnectionId id) { onOpen(id); });
     transport_.onMessage([this](net::ConnectionId id, const std::string& text) {
         onMessage(id, text);
@@ -83,7 +83,6 @@ void ServerApp::handleLogin(net::ConnectionId id, const protocol::LoginRequest& 
         return;
     }
     sessions_.emplace(id, Session{id, user->username, *color});
-    names_.set(*color, user->username);
     log_.info(user->username + " logged in as " + model::nameOf(*color) + " (connection " +
               std::to_string(id) + ")");
     transport_.send(id, protocol::encode(protocol::Assigned{*color}));
