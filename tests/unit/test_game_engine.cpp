@@ -365,6 +365,30 @@ TEST_CASE("a landing jump that takes the king names the jumper as the winner") {
     CHECK(observer.overs[0].winner == Color::kWhite);
 }
 
+TEST_CASE("declareForfeit ends the game and publishes a GameOverEvent for the given winner") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    RecordingObserver observer;
+    observer.subscribeTo(engine.events());
+
+    engine.declareForfeit(Color::kBlack);
+
+    CHECK(engine.isOver());
+    REQUIRE(observer.overs.size() == 1);
+    CHECK(observer.overs[0].winner == Color::kBlack);
+}
+
+TEST_CASE("declareForfeit on a game that already ended is a no-op") {
+    GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
+    RecordingObserver observer;
+    observer.subscribeTo(engine.events());
+    engine.declareForfeit(Color::kBlack);
+
+    engine.declareForfeit(Color::kWhite);
+
+    CHECK(observer.overs.size() == 1);
+    CHECK(observer.overs[0].winner == Color::kBlack);
+}
+
 TEST_CASE("every observer hears the same events") {
     GameEngine engine{boardWith({Piece{1, Color::kWhite, PieceKind::kRook, Position{4, 4}}})};
     RecordingObserver first;

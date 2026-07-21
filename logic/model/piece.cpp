@@ -23,6 +23,14 @@ const char* nameOf(Color color) {
     return kUnknownName;
 }
 
+Color opposite(Color color) {
+    switch (color) {
+        case Color::kWhite: return Color::kBlack;
+        case Color::kBlack: return Color::kWhite;
+    }
+    return color;
+}
+
 std::ostream& operator<<(std::ostream& os, Color color) {
     return os << nameOf(color);
 }

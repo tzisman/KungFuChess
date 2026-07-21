@@ -135,4 +135,10 @@ std::vector<realtime::LiftedPiece> GameEngine::liftedPieces() const {
 
 bool GameEngine::isOver() const { return state_.isOver(); }
 
+void GameEngine::declareForfeit(model::Color winner) {
+    if (state_.isOver()) return;
+    state_.markOver();
+    bus_.publish(GameOverEvent{winner, state_.elapsedMs()});
+}
+
 }

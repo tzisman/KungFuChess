@@ -51,9 +51,16 @@ struct JumpIntent {
     model::Position cell;
 };
 
+// Server -> Client: the opponent disconnected and this many seconds remain
+// before the disconnect is scored as a forfeit. A network fact, not part of
+// the game-state snapshot, so it travels as its own message alongside it.
+struct CountdownTick {
+    int secondsLeft;
+};
+
 // One of anything that can cross the wire. Decoding yields whichever it is; the
 // receiver dispatches on the alternative.
 using Message = std::variant<RegisterRequest, LoginRequest, Registered, AuthRejected,
-                              Assigned, Rejected, MoveIntent, JumpIntent>;
+                              Assigned, Rejected, MoveIntent, JumpIntent, CountdownTick>;
 
 }

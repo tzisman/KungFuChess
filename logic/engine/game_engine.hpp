@@ -48,6 +48,12 @@ public:
     std::vector<realtime::LiftedPiece> liftedPieces() const;
     bool isOver() const;
 
+    // Ends the game immediately in winner's favour for a reason outside the
+    // rules (e.g. the opponent disconnected), publishing the same GameOverEvent
+    // a king capture would, so every subscriber sees one consistent way for a
+    // game to end. A no-op if the game is already over.
+    void declareForfeit(model::Color winner);
+
 private:
     MoveResult checkMove(model::Position from, model::Position to) const;
 

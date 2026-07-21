@@ -135,6 +135,7 @@ add_library(kfc_server
     server/command_queue.cpp
     server/server_app.cpp
     server/game_session.cpp
+    server/session_manager.cpp
     server/elo.cpp
     server/password_hash.cpp
 )
@@ -192,6 +193,7 @@ add_executable(unit_tests
     tests/unit/test_command_queue.cpp
     tests/unit/test_server_app.cpp
     tests/unit/test_game_session.cpp
+    tests/unit/test_session_manager.cpp
     tests/unit/test_elo.cpp
     tests/unit/test_password_hash.cpp
     tests/unit/test_sqlite_user_store.cpp

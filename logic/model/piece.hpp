@@ -56,6 +56,9 @@ private:
 // that names a colour, so a display and a diagnostic can never disagree.
 const char* nameOf(Color color);
 
+// The other side. Whoever isn't this colour.
+Color opposite(Color color);
+
 std::ostream& operator<<(std::ostream& os, Color color);
 std::ostream& operator<<(std::ostream& os, PieceKind kind);
 std::ostream& operator<<(std::ostream& os, PieceState state);

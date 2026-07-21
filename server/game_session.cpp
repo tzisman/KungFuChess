@@ -9,7 +9,10 @@
 #include <vector>
 
 #include "product/game_state_view.hpp"
+#include "protocol/json_codec.hpp"
+#include "protocol/messages.hpp"
 #include "protocol/wire_snapshot.hpp"
+#include "server/elo.hpp"
 
 namespace kfc::server {
 namespace {
@@ -26,10 +29,16 @@ int elapsedMsSince(Clock::time_point& last) {
 }  // namespace
 
 GameSession::GameSession(net::ServerTransport& transport, model::Board board,
-                         realtime::MotionProfiles profiles)
-    : transport_(transport), engine_(std::move(board), std::move(profiles)) {
+                         realtime::MotionProfiles profiles, UserStore& users,
+                         common::Logger& log)
+    : transport_(transport),
+      users_(users),
+      log_(log),
+      engine_(std::move(board), std::move(profiles)) {
     scores_.subscribeTo(engine_.events());
     moveLog_.subscribeTo(engine_.events());
+    engine_.events().subscribe<engine::GameOverEvent>(
+        [this](const engine::GameOverEvent& event) { onGameOver(event); });
 }
 
 bool GameSession::claimColor(model::Color color, net::ConnectionId id,
@@ -54,10 +63,74 @@ std::optional<model::Color> GameSession::colorOf(net::ConnectionId id) const {
     return std::nullopt;
 }
 
+void GameSession::onDisconnect(net::ConnectionId id) {
+    std::optional<model::Color> color = colorOf(id);
+    if (!color) return;
+    disconnectedColor_ = color;
+    countdownRemainingMs_ = kDisconnectCountdownMs;
+    msSinceLastCountdownBroadcast_ = 0;
+    log_.info(model::nameOf(*color) + std::string{" disconnected; forfeit countdown started"});
+}
+
+void GameSession::reconnect(net::ConnectionId newId, model::Color color) {
+    auto it = std::find_if(players_.begin(), players_.end(),
+                           [&](const PlayerSlot& player) { return player.color == color; });
+    if (it == players_.end()) return;
+    it->connection = newId;
+    if (disconnectedColor_ == color) {
+        disconnectedColor_.reset();
+        countdownRemainingMs_ = 0;
+    }
+    log_.info(std::string{model::nameOf(color)} + " reconnected");
+}
+
+bool GameSession::isFinished() const { return finished_; }
+
 void GameSession::tick(int elapsedMs) {
+    if (finished_) return;
     applyCommands();
     engine_.advance(elapsedMs);
+    tickDisconnectCountdown(elapsedMs);
     broadcastState();
+}
+
+void GameSession::tickDisconnectCountdown(int elapsedMs) {
+    if (!disconnectedColor_) return;
+    countdownRemainingMs_ -= elapsedMs;
+    if (countdownRemainingMs_ <= 0) {
+        engine_.declareForfeit(model::opposite(*disconnectedColor_));
+        return;
+    }
+    msSinceLastCountdownBroadcast_ += elapsedMs;
+    if (msSinceLastCountdownBroadcast_ < kCountdownBroadcastIntervalMs) return;
+    msSinceLastCountdownBroadcast_ = 0;
+    broadcastCountdown();
+}
+
+void GameSession::broadcastCountdown() const {
+    int secondsLeft = countdownRemainingMs_ / 1000;
+    std::string payload = protocol::encode(protocol::Message{protocol::CountdownTick{secondsLeft}});
+    for (const PlayerSlot& player : players_) {
+        transport_.send(player.connection, payload);
+    }
+}
+
+void GameSession::onGameOver(const engine::GameOverEvent& event) {
+    finished_ = true;
+    model::Color loserColor = model::opposite(event.winner);
+    auto winner = std::find_if(players_.begin(), players_.end(),
+                               [&](const PlayerSlot& p) { return p.color == event.winner; });
+    auto loser = std::find_if(players_.begin(), players_.end(),
+                              [&](const PlayerSlot& p) { return p.color == loserColor; });
+    if (winner == players_.end() || loser == players_.end()) return;
+
+    EloUpdate update = computeElo(winner->rating, loser->rating);
+    winner->rating = update.winnerRating;
+    loser->rating = update.loserRating;
+    users_.updateRating(winner->username, update.winnerRating);
+    users_.updateRating(loser->username, update.loserRating);
+    log_.info(winner->username + " defeated " + loser->username + "; ratings now " +
+              std::to_string(update.winnerRating) + "/" + std::to_string(update.loserRating));
 }
 
 void GameSession::applyCommands() {
@@ -82,9 +155,8 @@ bool GameSession::ownsPieceAt(model::Color color, model::Position cell) const {
 }
 
 void GameSession::run() {
-    running_ = true;
     Clock::time_point last = Clock::now();
-    while (running_) {
+    while (running_ && !isFinished()) {
         tick(elapsedMsSince(last));
         std::this_thread::sleep_for(std::chrono::milliseconds(kFrameMs));
     }

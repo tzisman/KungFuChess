@@ -61,3 +61,8 @@ TEST_CASE("a printed colour reads as the name it is given") {
     os << Color::kBlack;
     CHECK(os.str() == kfc::model::nameOf(Color::kBlack));
 }
+
+TEST_CASE("the opposite of a colour is the other one") {
+    CHECK(kfc::model::opposite(Color::kWhite) == Color::kBlack);
+    CHECK(kfc::model::opposite(Color::kBlack) == Color::kWhite);
+}

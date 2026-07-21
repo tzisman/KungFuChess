@@ -21,6 +21,7 @@ constexpr char kReasonKey[] = "reason";
 constexpr char kFromKey[] = "from";
 constexpr char kToKey[] = "to";
 constexpr char kCellKey[] = "cell";
+constexpr char kSecondsLeftKey[] = "seconds_left";
 
 constexpr char kRegisterType[] = "register";
 constexpr char kLoginType[] = "login";
@@ -30,6 +31,7 @@ constexpr char kAssignedType[] = "assigned";
 constexpr char kRejectedType[] = "rejected";
 constexpr char kMoveType[] = "move";
 constexpr char kJumpType[] = "jump";
+constexpr char kCountdownTickType[] = "countdown_tick";
 
 std::string encodeColor(model::Color color) {
     return std::string(1, io::colorLetter(color));
@@ -73,11 +75,19 @@ struct EncodeVisitor {
     json operator()(const JumpIntent& message) const {
         return {{kTypeKey, kJumpType}, {kCellKey, encodePosition(message.cell)}};
     }
+    json operator()(const CountdownTick& message) const {
+        return {{kTypeKey, kCountdownTickType}, {kSecondsLeftKey, message.secondsLeft}};
+    }
 };
 
 std::optional<std::string> stringField(const json& object, const char* key) {
     if (!object.contains(key) || !object[key].is_string()) return std::nullopt;
     return object[key].get<std::string>();
+}
+
+std::optional<int> intField(const json& object, const char* key) {
+    if (!object.contains(key) || !object[key].is_number_integer()) return std::nullopt;
+    return object[key].get<int>();
 }
 
 }  // namespace
@@ -142,6 +152,11 @@ std::optional<Message> decode(const std::string& text) {
         std::optional<model::Position> cell = decodePosition(parsed[kCellKey]);
         if (!cell) return std::nullopt;
         return Message{JumpIntent{*cell}};
+    }
+    if (*type == kCountdownTickType) {
+        if (std::optional<int> secondsLeft = intField(parsed, kSecondsLeftKey))
+            return Message{CountdownTick{*secondsLeft}};
+        return std::nullopt;
     }
     return std::nullopt;
 }

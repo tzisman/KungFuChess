@@ -12,6 +12,7 @@ using kfc::model::Color;
 using kfc::model::Position;
 using kfc::protocol::Assigned;
 using kfc::protocol::AuthRejected;
+using kfc::protocol::CountdownTick;
 using kfc::protocol::decode;
 using kfc::protocol::encode;
 using kfc::protocol::JumpIntent;
@@ -93,6 +94,14 @@ TEST_CASE("a jump intent round-trips carrying the cell") {
     REQUIRE(decoded.has_value());
     REQUIRE(std::holds_alternative<JumpIntent>(*decoded));
     CHECK(std::get<JumpIntent>(*decoded).cell == Position{6, 2});
+}
+
+TEST_CASE("a countdown tick round-trips carrying the seconds left") {
+    std::optional<Message> decoded = decode(encode(Message{CountdownTick{12}}));
+
+    REQUIRE(decoded.has_value());
+    REQUIRE(std::holds_alternative<CountdownTick>(*decoded));
+    CHECK(std::get<CountdownTick>(*decoded).secondsLeft == 12);
 }
 
 TEST_CASE("decoding rejects malformed or unknown input") {
