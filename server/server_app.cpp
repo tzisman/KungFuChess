@@ -5,6 +5,7 @@
 
 #include "protocol/json_codec.hpp"
 #include "protocol/messages.hpp"
+#include "server/command_queue.hpp"
 
 namespace kfc::server {
 
@@ -14,8 +15,12 @@ constexpr char kUsernameTakenReason[] = "username_taken";
 }  // namespace
 
 ServerApp::ServerApp(net::ServerTransport& transport, common::Logger& log,
-                     CommandQueue& commands, UserStore& users)
-    : transport_(transport), log_(log), commands_(commands), users_(users) {
+                     Matchmaker& matchmaker, SessionManager& sessions, UserStore& users)
+    : transport_(transport),
+      log_(log),
+      matchmaker_(matchmaker),
+      sessions_(sessions),
+      users_(users) {
     transport_.onOpen([this](net::ConnectionId id) { onOpen(id); });
     transport_.onMessage([this](net::ConnectionId id, const std::string& text) {
         onMessage(id, text);
@@ -41,6 +46,10 @@ void ServerApp::onMessage(net::ConnectionId id, const std::string& text) {
         handleLogin(id, *login);
         return;
     }
+    if (std::get_if<protocol::PlayRequest>(&*message)) {
+        handlePlay(id);
+        return;
+    }
     if (const auto* move = std::get_if<protocol::MoveIntent>(&*message)) {
         handleMove(id, *move);
         return;
@@ -64,7 +73,7 @@ void ServerApp::handleRegister(net::ConnectionId id, const protocol::RegisterReq
 }
 
 void ServerApp::handleLogin(net::ConnectionId id, const protocol::LoginRequest& request) {
-    if (sessions_.count(id)) {
+    if (logins_.count(id)) {
         log_.info("connection " + std::to_string(id) + " already logged in");
         return;
     }
@@ -75,62 +84,55 @@ void ServerApp::handleLogin(net::ConnectionId id, const protocol::LoginRequest& 
         transport_.send(id, protocol::encode(protocol::AuthRejected{kInvalidCredentialsReason}));
         return;
     }
-    std::optional<model::Color> color = freeColor();
-    if (!color) {
-        log_.info(user->username + " (connection " + std::to_string(id) +
-                  ") rejected: game full");
-        transport_.send(id, protocol::encode(protocol::Rejected{"full"}));
+    logins_.emplace(id, Session{id, user->username});
+    log_.info(user->username + " logged in (connection " + std::to_string(id) + ")");
+    transport_.send(id, protocol::encode(protocol::LoggedIn{user->rating}));
+}
+
+void ServerApp::handlePlay(net::ConnectionId id) {
+    auto it = logins_.find(id);
+    if (it == logins_.end()) {
+        log_.info("connection " + std::to_string(id) + " requested PLAY without logging in");
         return;
     }
-    sessions_.emplace(id, Session{id, user->username, *color});
-    log_.info(user->username + " logged in as " + model::nameOf(*color) + " (connection " +
-              std::to_string(id) + ")");
-    transport_.send(id, protocol::encode(protocol::Assigned{*color}));
+    std::optional<int> rating = users_.ratingOf(it->second.username);
+    if (!rating) return;
+    matchmaker_.enqueue(id, it->second.username, *rating);
+    log_.info(it->second.username + " queued for a match (rating " + std::to_string(*rating) + ")");
 }
 
-void ServerApp::handleMove(net::ConnectionId id,
-                           const protocol::MoveIntent& intent) {
-    std::optional<model::Color> color = colorOf(id);
+void ServerApp::handleMove(net::ConnectionId id, const protocol::MoveIntent& intent) {
+    GameSession* session = sessions_.sessionFor(id);
+    if (!session) return;
+    std::optional<model::Color> color = session->colorOf(id);
     if (!color) return;
-    commands_.push(MoveCommand{*color, intent.from, intent.to});
+    session->submit(MoveCommand{*color, intent.from, intent.to});
 }
 
-void ServerApp::handleJump(net::ConnectionId id,
-                           const protocol::JumpIntent& intent) {
-    std::optional<model::Color> color = colorOf(id);
+void ServerApp::handleJump(net::ConnectionId id, const protocol::JumpIntent& intent) {
+    GameSession* session = sessions_.sessionFor(id);
+    if (!session) return;
+    std::optional<model::Color> color = session->colorOf(id);
     if (!color) return;
-    commands_.push(JumpCommand{*color, intent.cell});
-}
-
-std::optional<model::Color> ServerApp::colorOf(net::ConnectionId id) const {
-    auto it = sessions_.find(id);
-    if (it == sessions_.end()) return std::nullopt;
-    return it->second.color;
+    session->submit(JumpCommand{*color, intent.cell});
 }
 
 void ServerApp::onClose(net::ConnectionId id) {
-    auto it = sessions_.find(id);
-    if (it == sessions_.end()) {
-        log_.info("connection " + std::to_string(id) + " closed");
+    if (matchmaker_.isWaiting(id)) {
+        matchmaker_.dequeue(id);
+        log_.info("connection " + std::to_string(id) + " left the matchmaking queue");
+        logins_.erase(id);
         return;
     }
-    log_.info(it->second.username + " (" + model::nameOf(it->second.color) +
-              ") left; colour freed");
-    sessions_.erase(it);
-}
-
-std::optional<model::Color> ServerApp::freeColor() const {
-    for (model::Color color : model::kAllColors) {
-        bool taken = false;
-        for (const auto& [id, session] : sessions_) {
-            if (session.color == color) {
-                taken = true;
-                break;
-            }
-        }
-        if (!taken) return color;
+    if (GameSession* session = sessions_.sessionFor(id)) {
+        session->onDisconnect(id);
+        log_.info("connection " + std::to_string(id) +
+                  " disconnected mid-game; forfeit countdown started");
+        logins_.erase(id);
+        return;
     }
-    return std::nullopt;
+    log_.info("connection " + std::to_string(id) + " closed");
+    logins_.erase(id);
 }
 
 }

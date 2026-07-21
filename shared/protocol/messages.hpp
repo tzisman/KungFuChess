@@ -29,15 +29,25 @@ struct AuthRejected {
     std::string reason;
 };
 
-// Server -> Client: the player is in; this is the colour they play.
-struct Assigned {
-    model::Color color;
+// Server -> Client: login succeeded; this is the account's current rating.
+// Logging in no longer seats a player into a match by itself — that is what
+// PlayRequest is for.
+struct LoggedIn {
+    int rating;
 };
 
-// Server -> Client: the player cannot join, and why (e.g. the game is full).
-struct Rejected {
-    std::string reason;
+// Client -> Server: queue for a match against a similarly-rated opponent.
+struct PlayRequest {};
+
+// Server -> Client: matched into a fresh game; this is the colour the player
+// takes and the name of whoever they are playing.
+struct Matched {
+    model::Color color;
+    std::string opponentName;
 };
+
+// Server -> Client: no opponent was found within the matchmaking timeout.
+struct NoOpponent {};
 
 // Client -> Server: move the piece standing at `from` toward `to`. The server
 // resolves whose piece it actually is; the client only states the intent.
@@ -61,6 +71,7 @@ struct CountdownTick {
 // One of anything that can cross the wire. Decoding yields whichever it is; the
 // receiver dispatches on the alternative.
 using Message = std::variant<RegisterRequest, LoginRequest, Registered, AuthRejected,
-                              Assigned, Rejected, MoveIntent, JumpIntent, CountdownTick>;
+                              LoggedIn, PlayRequest, Matched, NoOpponent, MoveIntent,
+                              JumpIntent, CountdownTick>;
 
 }

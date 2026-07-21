@@ -10,18 +10,20 @@
 
 using kfc::model::Color;
 using kfc::model::Position;
-using kfc::protocol::Assigned;
 using kfc::protocol::AuthRejected;
 using kfc::protocol::CountdownTick;
 using kfc::protocol::decode;
 using kfc::protocol::encode;
 using kfc::protocol::JumpIntent;
+using kfc::protocol::LoggedIn;
 using kfc::protocol::LoginRequest;
+using kfc::protocol::Matched;
 using kfc::protocol::Message;
 using kfc::protocol::MoveIntent;
+using kfc::protocol::NoOpponent;
+using kfc::protocol::PlayRequest;
 using kfc::protocol::Registered;
 using kfc::protocol::RegisterRequest;
-using kfc::protocol::Rejected;
 
 TEST_CASE("a register request round-trips carrying username and password") {
     std::optional<Message> decoded =
@@ -59,22 +61,38 @@ TEST_CASE("an auth rejection round-trips carrying the reason") {
     CHECK(std::get<AuthRejected>(*decoded).reason == "invalid_credentials");
 }
 
-TEST_CASE("an assignment round-trips carrying the colour") {
+TEST_CASE("a logged-in confirmation round-trips carrying the rating") {
+    std::optional<Message> decoded = decode(encode(Message{LoggedIn{1200}}));
+
+    REQUIRE(decoded.has_value());
+    REQUIRE(std::holds_alternative<LoggedIn>(*decoded));
+    CHECK(std::get<LoggedIn>(*decoded).rating == 1200);
+}
+
+TEST_CASE("a play request round-trips") {
+    std::optional<Message> decoded = decode(encode(Message{PlayRequest{}}));
+
+    REQUIRE(decoded.has_value());
+    CHECK(std::holds_alternative<PlayRequest>(*decoded));
+}
+
+TEST_CASE("a matched notice round-trips carrying the colour and opponent name") {
     for (Color color : {Color::kWhite, Color::kBlack}) {
-        std::optional<Message> decoded = decode(encode(Message{Assigned{color}}));
+        std::optional<Message> decoded =
+            decode(encode(Message{Matched{color, "Alice"}}));
 
         REQUIRE(decoded.has_value());
-        REQUIRE(std::holds_alternative<Assigned>(*decoded));
-        CHECK(std::get<Assigned>(*decoded).color == color);
+        REQUIRE(std::holds_alternative<Matched>(*decoded));
+        CHECK(std::get<Matched>(*decoded).color == color);
+        CHECK(std::get<Matched>(*decoded).opponentName == "Alice");
     }
 }
 
-TEST_CASE("a rejection round-trips carrying the reason") {
-    std::optional<Message> decoded = decode(encode(Message{Rejected{"full"}}));
+TEST_CASE("a no-opponent notice round-trips") {
+    std::optional<Message> decoded = decode(encode(Message{NoOpponent{}}));
 
     REQUIRE(decoded.has_value());
-    REQUIRE(std::holds_alternative<Rejected>(*decoded));
-    CHECK(std::get<Rejected>(*decoded).reason == "full");
+    CHECK(std::holds_alternative<NoOpponent>(*decoded));
 }
 
 TEST_CASE("a move intent round-trips carrying from and to") {
@@ -110,7 +128,7 @@ TEST_CASE("decoding rejects malformed or unknown input") {
     CHECK_FALSE(decode(R"({"type":"unknown"})").has_value());
     CHECK_FALSE(decode(R"({"type":"register","username":"alice"})").has_value());  // missing password
     CHECK_FALSE(decode(R"({"type":"login"})").has_value());  // missing username and password
-    CHECK_FALSE(decode(R"({"type":"assigned","color":"x"})").has_value());
+    CHECK_FALSE(decode(R"({"type":"matched","color":"x"})").has_value());
     CHECK_FALSE(decode(R"({"type":"move","from":{"row":1,"col":4}})")
                     .has_value());  // missing to
     CHECK_FALSE(decode(R"({"type":"jump"})").has_value());  // missing cell

@@ -12,7 +12,9 @@
 #include "common/logger.hpp"
 #include "img.hpp"
 #include "input/controller.hpp"
+#include "input/lobby_mapper.hpp"
 #include "input/network_command_sink.hpp"
+#include "input/network_lobby_sink.hpp"
 #include "model/board.hpp"
 #include "model/piece.hpp"
 #include "net/websocketpp_transport.hpp"
@@ -23,6 +25,8 @@
 #include "rules/rule_engine.hpp"
 #include "view/board_geometry.hpp"
 #include "view/game_snapshot.hpp"
+#include "view/lobby_renderer.hpp"
+#include "view/lobby_snapshot.hpp"
 #include "view/panel_layout.hpp"
 #include "view/renderer.hpp"
 #include "view/sprite_library.hpp"
@@ -38,6 +42,9 @@ constexpr int kBoardDisplaySize = 435;
 constexpr int kFrameDelayMs = 30;
 constexpr int kAuthPollMs = 20;
 constexpr int kQuitKey = 27;  // Esc
+constexpr char kWaitingForOpponentStatus[] = "Waiting for an opponent...";
+constexpr char kNoOpponentStatus[] = "No opponent found. Try again.";
+constexpr char kRoomsNotAvailableStatus[] = "Rooms are coming soon.";
 
 using Clock = std::chrono::steady_clock;
 
@@ -141,8 +148,7 @@ bool askWantsToRegister() {
 // answer from a previous one.
 struct AuthOutcome {
     std::mutex mutex;
-    std::optional<kfc::model::Color> color;
-    std::optional<std::string> gameRejection;
+    std::optional<int> rating;
     std::optional<std::string> authRejection;
     bool registered = false;
     bool closed = false;
@@ -150,8 +156,7 @@ struct AuthOutcome {
 
 void resetAuthOutcome(AuthOutcome& outcome) {
     std::lock_guard<std::mutex> lock{outcome.mutex};
-    outcome.color.reset();
-    outcome.gameRejection.reset();
+    outcome.rating.reset();
     outcome.authRejection.reset();
     outcome.registered = false;
 }
@@ -178,20 +183,15 @@ bool awaitRegistration(AuthOutcome& outcome) {
     }
 }
 
-// Blocks until the server assigns a colour, rejects the login (bad
-// credentials), rejects the game as full, or the connection drops. A bad
-// login returns nullopt so the caller can ask again; a full game or a
-// dropped connection has nothing left to retry against, so those end the
-// process instead.
-std::optional<kfc::model::Color> awaitLogin(AuthOutcome& outcome) {
+// Blocks until the server confirms login (returning the account's rating),
+// rejects it (bad credentials), or the connection drops. A bad login returns
+// nullopt so the caller can ask again; a dropped connection has nothing left
+// to retry against, so that ends the process instead.
+std::optional<int> awaitLogin(AuthOutcome& outcome) {
     while (true) {
         {
             std::lock_guard<std::mutex> lock{outcome.mutex};
-            if (outcome.color) return outcome.color;
-            if (outcome.gameRejection) {
-                std::cerr << "Server rejected login: " << *outcome.gameRejection << "\n";
-                std::exit(1);
-            }
+            if (outcome.rating) return outcome.rating;
             if (outcome.authRejection) {
                 std::cout << "Login rejected: " << *outcome.authRejection << "\n";
                 return std::nullopt;
@@ -205,12 +205,11 @@ std::optional<kfc::model::Color> awaitLogin(AuthOutcome& outcome) {
     }
 }
 
-// Drives the terminal register/login prompts until the server assigns a
-// colour. Registering succeeds into an automatic login attempt with the same
+// Drives the terminal register/login prompts until the server confirms a
+// login. Registering succeeds into an automatic login attempt with the same
 // credentials; either one being rejected loops back to ask again.
-kfc::model::Color askForCredentialsUntilLoggedIn(kfc::net::WebsocketppClient& transport,
-                                                  kfc::common::Logger& log,
-                                                  AuthOutcome& outcome) {
+void askForCredentialsUntilLoggedIn(kfc::net::WebsocketppClient& transport,
+                                    kfc::common::Logger& log, AuthOutcome& outcome) {
     while (true) {
         bool wantsRegister = askWantsToRegister();
         Credentials creds = askForCredentials();
@@ -228,28 +227,40 @@ kfc::model::Color askForCredentialsUntilLoggedIn(kfc::net::WebsocketppClient& tr
         log.info("logging in as " + creds.username);
         transport.send(kfc::protocol::encode(
             kfc::protocol::Message{kfc::protocol::LoginRequest{creds.username, creds.password}}));
-        if (std::optional<kfc::model::Color> color = awaitLogin(outcome)) return *color;
+        if (awaitLogin(outcome)) return;
     }
 }
 
+// Filled in from the network thread as the server answers a PLAY request, and
+// read by the main thread each frame while it shows the lobby.
+struct MatchOutcome {
+    std::mutex mutex;
+    std::optional<kfc::protocol::Matched> matched;
+    bool noOpponent = false;
+};
+
 }  // namespace
 
-// Step 3 client: logs in with an account (username+password, registering
-// first if needed) in the terminal, and opens the game window only once the
-// server has assigned a colour. From there it plays exactly as step 10 left
-// it: no local engine, every click becomes a MoveIntent/JumpIntent, every
-// frame drawn comes from the server's own broadcast snapshot. The transport's
-// io loop runs on a background thread; the main thread owns OpenCV and the
-// shared state it reads is guarded by a mutex throughout.
+// Composition root of the networked client. Logs in with an account in the
+// terminal (registering first if needed), then shows a lobby screen with a
+// PLAY button: clicking it queues for a match, and the game screen (unchanged
+// from the pre-matchmaking client) only opens once the server reports a
+// Matched opponent. No local engine anywhere: every click becomes a
+// MoveIntent/JumpIntent, every frame drawn comes from the server's own
+// broadcast snapshot. The transport's io loop runs on a background thread;
+// the main thread owns OpenCV and the shared state it reads is guarded by a
+// mutex throughout.
 int main() {
     kfc::common::Logger log{"CLIENT"};
 
     AuthOutcome outcome;
+    MatchOutcome matchOutcome;
     std::mutex stateMutex;
     std::optional<kfc::product::GameStateView> latest;
 
     kfc::net::WebsocketppClient transport;
     kfc::input::NetworkCommandSink commands{transport};
+    kfc::input::NetworkLobbySink lobbySink{transport};
 
     transport.onOpen([&log]() { log.info("connected"); });
     transport.onClose([&log, &outcome]() {
@@ -257,17 +268,11 @@ int main() {
         std::lock_guard<std::mutex> lock{outcome.mutex};
         outcome.closed = true;
     });
-    transport.onMessage([&outcome, &stateMutex, &latest](const std::string& text) {
-        if (std::optional<kfc::protocol::Message> message =
-                kfc::protocol::decode(text)) {
-            if (const auto* assigned =
-                    std::get_if<kfc::protocol::Assigned>(&*message)) {
+    transport.onMessage([&outcome, &matchOutcome, &stateMutex, &latest](const std::string& text) {
+        if (std::optional<kfc::protocol::Message> message = kfc::protocol::decode(text)) {
+            if (const auto* loggedIn = std::get_if<kfc::protocol::LoggedIn>(&*message)) {
                 std::lock_guard<std::mutex> lock{outcome.mutex};
-                outcome.color = assigned->color;
-            } else if (const auto* rejected =
-                           std::get_if<kfc::protocol::Rejected>(&*message)) {
-                std::lock_guard<std::mutex> lock{outcome.mutex};
-                outcome.gameRejection = rejected->reason;
+                outcome.rating = loggedIn->rating;
             } else if (std::get_if<kfc::protocol::Registered>(&*message)) {
                 std::lock_guard<std::mutex> lock{outcome.mutex};
                 outcome.registered = true;
@@ -275,6 +280,12 @@ int main() {
                            std::get_if<kfc::protocol::AuthRejected>(&*message)) {
                 std::lock_guard<std::mutex> lock{outcome.mutex};
                 outcome.authRejection = authRejected->reason;
+            } else if (const auto* matched = std::get_if<kfc::protocol::Matched>(&*message)) {
+                std::lock_guard<std::mutex> lock{matchOutcome.mutex};
+                matchOutcome.matched = *matched;
+            } else if (std::get_if<kfc::protocol::NoOpponent>(&*message)) {
+                std::lock_guard<std::mutex> lock{matchOutcome.mutex};
+                matchOutcome.noOpponent = true;
             }
             return;
         }
@@ -289,7 +300,7 @@ int main() {
     transport.connect(kServerUri);
     std::thread network([&transport] { transport.run(); });
 
-    kfc::model::Color myColor = askForCredentialsUntilLoggedIn(transport, log, outcome);
+    askForCredentialsUntilLoggedIn(transport, log, outcome);
 
     Img boardImage;
     boardImage.read(kBoardImagePath, {kBoardDisplaySize, kBoardDisplaySize},
@@ -297,9 +308,15 @@ int main() {
     kfc::view::PanelLayout layout{boardImage.get_mat().cols,
                                   boardImage.get_mat().rows};
     kfc::view::Window window{kWindowTitle};
+    kfc::view::LobbyRenderer lobbyRenderer{layout.canvasWidth(), layout.canvasHeight()};
+
+    enum class Screen { kLobby, kGame };
+    Screen screen = Screen::kLobby;
+    std::optional<std::string> lobbyStatus;
+    kfc::model::Color myColor = kfc::model::Color::kWhite;
 
     // Built lazily once the board's dimensions are known from the first
-    // snapshot; myColor is already in hand by the time we get here.
+    // snapshot after a match is found.
     std::optional<kfc::view::SpriteLibrary> sprites;
     std::optional<kfc::view::Renderer> renderer;
     std::optional<kfc::model::Board> board;
@@ -307,42 +324,72 @@ int main() {
 
     Clock::time_point start = Clock::now();
     while (true) {
-        std::optional<kfc::product::GameStateView> current;
-        {
-            std::lock_guard<std::mutex> lock{stateMutex};
-            current = latest;
+        if (screen == Screen::kLobby) {
+            std::lock_guard<std::mutex> lock{matchOutcome.mutex};
+            if (matchOutcome.matched) {
+                myColor = matchOutcome.matched->color;
+                screen = Screen::kGame;
+                lobbyStatus.reset();
+            } else if (matchOutcome.noOpponent) {
+                lobbyStatus = kNoOpponentStatus;
+                matchOutcome.noOpponent = false;
+            }
         }
 
-        if (current) {
-            if (!renderer) {
-                kfc::view::BoardGeometry geometry{
-                    boardImage.get_mat().cols, boardImage.get_mat().rows,
-                    current->boardWidth, current->boardHeight,
-                    layout.boardOrigin()};
-                sprites.emplace(kPiecesRoot, geometry.cellWidth(),
-                                geometry.cellHeight());
-                renderer.emplace(kBoardImagePath, *sprites, geometry, layout);
-                board.emplace(current->boardWidth, current->boardHeight);
-                controller.emplace(kfc::app::makeController(*board, commands,
-                                                            geometry, myColor));
-            }
-            syncBoard(*board, current->pieces);
-
+        if (screen == Screen::kLobby) {
             for (const kfc::view::MouseEvent& event : window.takeMouseEvents()) {
-                dispatch(event, *controller);
+                if (event.type != kfc::view::MouseEvent::Type::kClick) continue;
+                switch (kfc::input::hitTest(lobbyRenderer.layout(), event.x, event.y)) {
+                    case kfc::input::LobbyAction::kPlay:
+                        lobbySink.requestPlay();
+                        lobbyStatus = kWaitingForOpponentStatus;
+                        break;
+                    case kfc::input::LobbyAction::kEnterRoom:
+                        lobbyStatus = kRoomsNotAvailableStatus;
+                        break;
+                    case kfc::input::LobbyAction::kNone:
+                        break;
+                }
+            }
+            window.show(lobbyRenderer.render(kfc::view::LobbyFrame{lobbyStatus}));
+        } else {
+            std::optional<kfc::product::GameStateView> current;
+            {
+                std::lock_guard<std::mutex> lock{stateMutex};
+                current = latest;
             }
 
-            std::vector<kfc::model::Position> moveTargets;
-            if (std::optional<kfc::model::Position> selection = controller->selection()) {
-                moveTargets =
-                    legalDestinationsFrom(*board, *selection, current->gameOver);
-            }
+            if (current) {
+                if (!renderer) {
+                    kfc::view::BoardGeometry geometry{
+                        boardImage.get_mat().cols, boardImage.get_mat().rows,
+                        current->boardWidth, current->boardHeight,
+                        layout.boardOrigin()};
+                    sprites.emplace(kPiecesRoot, geometry.cellWidth(),
+                                    geometry.cellHeight());
+                    renderer.emplace(kBoardImagePath, *sprites, geometry, layout);
+                    board.emplace(current->boardWidth, current->boardHeight);
+                    controller.emplace(kfc::app::makeController(*board, commands,
+                                                                geometry, myColor));
+                }
+                syncBoard(*board, current->pieces);
 
-            window.show(renderer->render(
-                kfc::view::buildSnapshot(std::move(*current),
-                                         controller->selection(),
-                                         std::move(moveTargets)),
-                elapsedMsSince(start)));
+                for (const kfc::view::MouseEvent& event : window.takeMouseEvents()) {
+                    dispatch(event, *controller);
+                }
+
+                std::vector<kfc::model::Position> moveTargets;
+                if (std::optional<kfc::model::Position> selection = controller->selection()) {
+                    moveTargets =
+                        legalDestinationsFrom(*board, *selection, current->gameOver);
+                }
+
+                window.show(renderer->render(
+                    kfc::view::buildSnapshot(std::move(*current),
+                                             controller->selection(),
+                                             std::move(moveTargets)),
+                    elapsedMsSince(start)));
+            }
         }
 
         if (window.waitKey(kFrameDelayMs) == kQuitKey) break;

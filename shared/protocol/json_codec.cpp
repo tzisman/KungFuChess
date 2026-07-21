@@ -18,6 +18,8 @@ constexpr char kUsernameKey[] = "username";
 constexpr char kPasswordKey[] = "password";
 constexpr char kColorKey[] = "color";
 constexpr char kReasonKey[] = "reason";
+constexpr char kRatingKey[] = "rating";
+constexpr char kOpponentNameKey[] = "opponent_name";
 constexpr char kFromKey[] = "from";
 constexpr char kToKey[] = "to";
 constexpr char kCellKey[] = "cell";
@@ -27,8 +29,10 @@ constexpr char kRegisterType[] = "register";
 constexpr char kLoginType[] = "login";
 constexpr char kRegisteredType[] = "registered";
 constexpr char kAuthRejectedType[] = "auth_rejected";
-constexpr char kAssignedType[] = "assigned";
-constexpr char kRejectedType[] = "rejected";
+constexpr char kLoggedInType[] = "logged_in";
+constexpr char kPlayRequestType[] = "play_request";
+constexpr char kMatchedType[] = "matched";
+constexpr char kNoOpponentType[] = "no_opponent";
 constexpr char kMoveType[] = "move";
 constexpr char kJumpType[] = "jump";
 constexpr char kCountdownTickType[] = "countdown_tick";
@@ -61,11 +65,19 @@ struct EncodeVisitor {
     json operator()(const AuthRejected& message) const {
         return {{kTypeKey, kAuthRejectedType}, {kReasonKey, message.reason}};
     }
-    json operator()(const Assigned& message) const {
-        return {{kTypeKey, kAssignedType}, {kColorKey, encodeColor(message.color)}};
+    json operator()(const LoggedIn& message) const {
+        return {{kTypeKey, kLoggedInType}, {kRatingKey, message.rating}};
     }
-    json operator()(const Rejected& message) const {
-        return {{kTypeKey, kRejectedType}, {kReasonKey, message.reason}};
+    json operator()(const PlayRequest&) const {
+        return {{kTypeKey, kPlayRequestType}};
+    }
+    json operator()(const Matched& message) const {
+        return {{kTypeKey, kMatchedType},
+                {kColorKey, encodeColor(message.color)},
+                {kOpponentNameKey, message.opponentName}};
+    }
+    json operator()(const NoOpponent&) const {
+        return {{kTypeKey, kNoOpponentType}};
     }
     json operator()(const MoveIntent& message) const {
         return {{kTypeKey, kMoveType},
@@ -128,16 +140,23 @@ std::optional<Message> decode(const std::string& text) {
             return Message{AuthRejected{*reason}};
         return std::nullopt;
     }
-    if (*type == kAssignedType) {
-        if (!parsed.contains(kColorKey)) return std::nullopt;
-        if (std::optional<model::Color> color = decodeColor(parsed[kColorKey]))
-            return Message{Assigned{*color}};
+    if (*type == kLoggedInType) {
+        if (std::optional<int> rating = intField(parsed, kRatingKey))
+            return Message{LoggedIn{*rating}};
         return std::nullopt;
     }
-    if (*type == kRejectedType) {
-        if (std::optional<std::string> reason = stringField(parsed, kReasonKey))
-            return Message{Rejected{*reason}};
-        return std::nullopt;
+    if (*type == kPlayRequestType) {
+        return Message{PlayRequest{}};
+    }
+    if (*type == kMatchedType) {
+        if (!parsed.contains(kColorKey)) return std::nullopt;
+        std::optional<model::Color> color = decodeColor(parsed[kColorKey]);
+        std::optional<std::string> opponentName = stringField(parsed, kOpponentNameKey);
+        if (!color || !opponentName) return std::nullopt;
+        return Message{Matched{*color, *opponentName}};
+    }
+    if (*type == kNoOpponentType) {
+        return Message{NoOpponent{}};
     }
     if (*type == kMoveType) {
         if (!parsed.contains(kFromKey) || !parsed.contains(kToKey))

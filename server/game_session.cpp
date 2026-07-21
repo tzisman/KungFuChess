@@ -43,6 +43,7 @@ GameSession::GameSession(net::ServerTransport& transport, model::Board board,
 
 bool GameSession::claimColor(model::Color color, net::ConnectionId id,
                              std::string username, int rating) {
+    std::lock_guard<std::mutex> lock{mutex_};
     for (const PlayerSlot& player : players_) {
         if (player.color == color) return false;
     }
@@ -57,6 +58,7 @@ bool GameSession::ownsConnection(net::ConnectionId id) const {
 }
 
 std::optional<model::Color> GameSession::colorOf(net::ConnectionId id) const {
+    std::lock_guard<std::mutex> lock{mutex_};
     for (const PlayerSlot& player : players_) {
         if (player.connection == id) return player.color;
     }
@@ -64,15 +66,18 @@ std::optional<model::Color> GameSession::colorOf(net::ConnectionId id) const {
 }
 
 void GameSession::onDisconnect(net::ConnectionId id) {
-    std::optional<model::Color> color = colorOf(id);
-    if (!color) return;
-    disconnectedColor_ = color;
+    std::lock_guard<std::mutex> lock{mutex_};
+    auto it = std::find_if(players_.begin(), players_.end(),
+                           [&](const PlayerSlot& player) { return player.connection == id; });
+    if (it == players_.end()) return;
+    disconnectedColor_ = it->color;
     countdownRemainingMs_ = kDisconnectCountdownMs;
     msSinceLastCountdownBroadcast_ = 0;
-    log_.info(model::nameOf(*color) + std::string{" disconnected; forfeit countdown started"});
+    log_.info(model::nameOf(it->color) + std::string{" disconnected; forfeit countdown started"});
 }
 
 void GameSession::reconnect(net::ConnectionId newId, model::Color color) {
+    std::lock_guard<std::mutex> lock{mutex_};
     auto it = std::find_if(players_.begin(), players_.end(),
                            [&](const PlayerSlot& player) { return player.color == color; });
     if (it == players_.end()) return;
@@ -84,9 +89,20 @@ void GameSession::reconnect(net::ConnectionId newId, model::Color color) {
     log_.info(std::string{model::nameOf(color)} + " reconnected");
 }
 
-bool GameSession::isFinished() const { return finished_; }
+bool GameSession::isFinished() const {
+    std::lock_guard<std::mutex> lock{mutex_};
+    return finished_;
+}
 
+// Locked for its whole body: this runs on the session's own thread once
+// SessionManager spawns it, while claimColor/onDisconnect/reconnect/colorOf/
+// isFinished above may be called concurrently from ServerApp's or
+// Scheduler's thread. Everything this touches — directly or through the
+// tickDisconnectCountdown/broadcastState/onGameOver helpers below — is
+// private state guarded by the same mutex_, so none of those helpers lock it
+// again themselves.
 void GameSession::tick(int elapsedMs) {
+    std::lock_guard<std::mutex> lock{mutex_};
     if (finished_) return;
     applyCommands();
     engine_.advance(elapsedMs);

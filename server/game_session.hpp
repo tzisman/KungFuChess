@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -84,6 +85,12 @@ private:
     UserStore& users_;
     common::Logger& log_;
     CommandQueue commands_;
+    // Guards everything below except commands_ (already its own safe
+    // cross-thread channel) and running_ (already atomic). SessionManager
+    // runs tick() on this session's own thread while ServerApp/Scheduler call
+    // claimColor/onDisconnect/reconnect/colorOf/isFinished from theirs, so
+    // this state needs real synchronization, not just atomics.
+    mutable std::mutex mutex_;
     std::vector<PlayerSlot> players_;
     product::ScoreBoard scores_;
     product::MoveLog moveLog_;
