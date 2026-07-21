@@ -80,10 +80,13 @@ add_library(kfc
     client/input/board_mapper.cpp
     client/input/controller.cpp
     client/input/lobby_mapper.cpp
+    client/input/text_prompt_buffer.cpp
     client/view/board_geometry.cpp
     client/view/panel_layout.cpp
     client/view/game_snapshot.cpp
     client/view/lobby_layout.cpp
+    client/view/countdown_overlay.cpp
+    client/view/resize_watcher.cpp
     logic/io/piece_codec.cpp
     logic/io/piece_config.cpp
     logic/io/board_parser.cpp
@@ -122,6 +125,8 @@ add_library(kfc_view
     client/view/renderer.cpp
     client/view/window.cpp
     client/view/lobby_renderer.cpp
+    client/view/text_prompt.cpp
+    client/app/composition.cpp
 )
 target_link_libraries(kfc_view PUBLIC kfc kfc_img)
 
@@ -141,6 +146,7 @@ add_library(kfc_server
     server/session_manager.cpp
     server/matchmaker.cpp
     server/scheduler.cpp
+    server/room_registry.cpp
     server/elo.cpp
     server/password_hash.cpp
 )
@@ -184,9 +190,12 @@ add_executable(unit_tests
     tests/unit/test_game_state_view.cpp
     tests/unit/test_board_geometry.cpp
     tests/unit/test_panel_layout.cpp
+    tests/unit/test_resize_watcher.cpp
     tests/unit/test_board_mapper.cpp
     tests/unit/test_controller.cpp
     tests/unit/test_lobby_mapper.cpp
+    tests/unit/test_countdown_overlay.cpp
+    tests/unit/test_text_prompt_buffer.cpp
     tests/unit/test_network_command_sink.cpp
     tests/unit/test_network_lobby_sink.cpp
     tests/unit/test_game_snapshot.cpp
@@ -203,6 +212,7 @@ add_executable(unit_tests
     tests/unit/test_session_manager.cpp
     tests/unit/test_matchmaker.cpp
     tests/unit/test_scheduler.cpp
+    tests/unit/test_room_registry.cpp
     tests/unit/test_elo.cpp
     tests/unit/test_password_hash.cpp
     tests/unit/test_sqlite_user_store.cpp

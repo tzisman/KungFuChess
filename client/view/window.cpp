@@ -7,7 +7,7 @@
 namespace kfc::view {
 
 Window::Window(std::string title) : title_(std::move(title)) {
-    cv::namedWindow(title_, cv::WINDOW_AUTOSIZE);
+    cv::namedWindow(title_, cv::WINDOW_NORMAL);
     cv::setMouseCallback(title_, &Window::onMouse, this);
 }
 
@@ -16,6 +16,15 @@ Window::~Window() { cv::destroyWindow(title_); }
 void Window::show(const Img& frame) { cv::imshow(title_, frame.get_mat()); }
 
 int Window::waitKey(int waitMs) const { return cv::waitKey(waitMs); }
+
+WindowSize Window::contentSize() const {
+    cv::Rect rect = cv::getWindowImageRect(title_);
+    return {rect.width, rect.height};
+}
+
+void Window::resizeTo(WindowSize size) {
+    cv::resizeWindow(title_, size.width, size.height);
+}
 
 std::vector<MouseEvent> Window::takeMouseEvents() {
     std::vector<MouseEvent> taken;

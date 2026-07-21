@@ -129,6 +129,59 @@ TEST_CASE("a first click on the opponent's piece is ignored when myColor is set"
     CHECK_FALSE(controller.selection().has_value());
 }
 
+TEST_CASE("a non-interactive controller ignores clicks entirely, like a spectator") {
+    GameEngine engine{boardWithRook()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper(), std::nullopt,
+                          /*interactive=*/false};
+
+    controller.handleClick(centerX(4), centerY(4));
+
+    CHECK_FALSE(controller.selection().has_value());
+}
+
+TEST_CASE("a non-interactive controller ignores jumps entirely, like a spectator") {
+    GameEngine engine{boardWithRook()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper(), std::nullopt,
+                          /*interactive=*/false};
+
+    controller.handleJump(centerX(4), centerY(4));
+
+    engine.advance(3 * kSquareTravelMs);
+    std::optional<Piece> piece = engine.board().pieceAt(Position{4, 4});
+    REQUIRE(piece.has_value());
+    CHECK(piece->state() == kfc::model::PieceState::kIdle);
+}
+
+TEST_CASE("setGeometry does not disturb an existing selection") {
+    GameEngine engine{boardWithRook()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper()};
+
+    controller.handleClick(centerX(4), centerY(4));
+    REQUIRE(controller.selection() == Position{4, 4});
+
+    controller.setGeometry(BoardGeometry{4 * kCellSize, 4 * kCellSize, 8, 8});
+
+    CHECK(controller.selection() == Position{4, 4});
+}
+
+TEST_CASE("setGeometry re-points click mapping at the board's new size") {
+    GameEngine engine{boardWithRook()};
+    EngineCommandSink commands{engine};
+    Controller controller{engine.board(), commands, mapper()};
+
+    controller.setGeometry(BoardGeometry{4 * kCellSize, 4 * kCellSize, 8, 8});
+
+    // Under the original 8x8-at-100px mapper this pixel would fall in
+    // column 4, selecting the rook; the new, half-sized geometry reads the
+    // same pixel as column 8, off the board.
+    controller.handleClick(4 * kCellSize + kCellSize / 2, centerY(4));
+
+    CHECK_FALSE(controller.selection().has_value());
+}
+
 TEST_CASE("an illegal second click still clears the selection and moves nothing") {
     GameEngine engine{boardWithRook()};
     EngineCommandSink commands{engine};

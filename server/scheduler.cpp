@@ -61,7 +61,9 @@ void Scheduler::seatAndNotify(MatchId matchId, const WaitingPlayer& white,
     session->claimColor(model::Color::kWhite, white.connection, white.username, white.rating);
     session->claimColor(model::Color::kBlack, black.connection, black.username, black.rating);
 
-    log_.info(white.username + " (white) matched against " + black.username + " (black)");
+    log_.info(white.username + " (white, rating " + std::to_string(white.rating) +
+             ") matched against " + black.username + " (black, rating " +
+             std::to_string(black.rating) + ")");
     transport_.send(white.connection, protocol::encode(protocol::Message{
                                           protocol::Matched{model::Color::kWhite, black.username}}));
     transport_.send(black.connection, protocol::encode(protocol::Message{

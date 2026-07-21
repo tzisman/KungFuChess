@@ -22,6 +22,7 @@ private:
     void drawButton(Img& canvas, const LobbyButtonRect& rect,
                     const std::string& label) const;
     void drawStatus(Img& canvas, const std::string& message) const;
+    void drawRating(Img& canvas, int rating) const;
 
     LobbyLayout layout_;
 };

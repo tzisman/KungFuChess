@@ -21,6 +21,7 @@
 #include "protocol/wire_snapshot.hpp"
 #include "server/game_session.hpp"
 #include "server/matchmaker.hpp"
+#include "server/room_registry.hpp"
 #include "server/server_app.hpp"
 #include "server/session_manager.hpp"
 #include "server/user_store.hpp"
@@ -37,19 +38,24 @@ using kfc::protocol::AuthRejected;
 using kfc::protocol::decode;
 using kfc::protocol::decodeSnapshot;
 using kfc::protocol::encode;
+using kfc::protocol::EnterRoomRequest;
 using kfc::protocol::JumpIntent;
 using kfc::protocol::LoggedIn;
 using kfc::protocol::LoginRequest;
+using kfc::protocol::Matched;
 using kfc::protocol::Message;
 using kfc::protocol::MoveIntent;
 using kfc::protocol::PlayRequest;
 using kfc::protocol::Registered;
 using kfc::protocol::RegisterRequest;
+using kfc::protocol::Role;
+using kfc::protocol::RoomJoined;
 using kfc::server::GameSession;
 using kfc::server::kDefaultRating;
 using kfc::server::Matchmaker;
 using kfc::server::MatchId;
 using kfc::server::Pairing;
+using kfc::server::RoomRegistry;
 using kfc::server::ServerApp;
 using kfc::server::SessionManager;
 using kfc::test::FakeServerTransport;
@@ -135,7 +141,8 @@ TEST_CASE("registering an existing username is rejected") {
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
 
     transport.connect(1);
     transport.receive(1, registerMessage("Alice"));
@@ -155,7 +162,8 @@ TEST_CASE("logging in with the wrong password is rejected") {
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
 
     transport.connect(1);
     transport.receive(1, registerMessage("Alice"));
@@ -174,7 +182,8 @@ TEST_CASE("logging in returns the account's current rating") {
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
 
     joinAs(transport, 1, "Alice");
 
@@ -191,7 +200,8 @@ TEST_CASE("PLAY queues the connection with the account's current rating") {
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
     joinAs(transport, 1, "Alice");
 
     transport.receive(1, encode(Message{PlayRequest{}}));
@@ -210,7 +220,8 @@ TEST_CASE("PLAY from a connection that never logged in is ignored") {
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
 
     transport.connect(1);
     transport.receive(1, encode(Message{PlayRequest{}}));
@@ -225,7 +236,8 @@ TEST_CASE("a move intent from a connection with no active session is dropped") {
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
     joinAs(transport, 1, "Alice");
 
     transport.receive(1, encode(Message{MoveIntent{Position{1, 4}, Position{3, 4}}}));
@@ -240,7 +252,8 @@ TEST_CASE("a move intent from a seated connection is routed to its session and a
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
     MatchId matchId = sessions.createSession(boardWithRook());
     GameSession* session = sessions.find(matchId);
     REQUIRE(session != nullptr);
@@ -266,7 +279,8 @@ TEST_CASE("a jump intent from a seated connection is routed to its session and a
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
     MatchId matchId = sessions.createSession(boardWithRook());
     GameSession* session = sessions.find(matchId);
     REQUIRE(session != nullptr);
@@ -288,7 +302,8 @@ TEST_CASE("a disconnect while waiting for a match removes the connection from th
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
     joinAs(transport, 1, "Alice");
     transport.receive(1, encode(Message{PlayRequest{}}));
     REQUIRE(matchmaker.isWaiting(1));
@@ -305,7 +320,8 @@ TEST_CASE("a disconnect mid-game starts that session's forfeit countdown instead
     FakeUserStore users;
     Matchmaker matchmaker;
     SessionManager sessions{transport, users, log};
-    ServerApp app{transport, log, matchmaker, sessions, users};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
     MatchId matchId = sessions.createSession(boardWithRook());
     GameSession* session = sessions.find(matchId);
     REQUIRE(session != nullptr);
@@ -324,4 +340,109 @@ TEST_CASE("a disconnect mid-game starts that session's forfeit countdown instead
         std::optional<Message> message = lastMessageToSync(transport, 2);
         return message && std::holds_alternative<kfc::protocol::CountdownTick>(*message);
     }));
+}
+
+TEST_CASE("logging in again under the same username while mid-game reconnects to that session") {
+    std::ostringstream quiet;
+    Logger log{"TEST", quiet};
+    FakeServerTransport transport;
+    FakeUserStore users;
+    Matchmaker matchmaker;
+    SessionManager sessions{transport, users, log};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
+    transport.connect(1);
+    transport.receive(1, registerMessage("Alice"));
+    transport.connect(2);
+    transport.receive(2, registerMessage("Bob"));
+    MatchId matchId = sessions.createSession(boardWithRook());
+    GameSession* session = sessions.find(matchId);
+    REQUIRE(session != nullptr);
+    session->claimColor(Color::kWhite, 1, "Alice", kDefaultRating);
+    session->claimColor(Color::kBlack, 2, "Bob", kDefaultRating);
+
+    transport.disconnect(1);
+    REQUIRE(waitUntil([&] {
+        std::optional<Message> message = lastMessageToSync(transport, 2);
+        return message && std::holds_alternative<kfc::protocol::CountdownTick>(*message);
+    }));
+
+    // Alice logs back in on a brand-new connection before the countdown ends.
+    transport.connect(3);
+    transport.receive(3, loginMessage("Alice"));
+
+    REQUIRE(waitUntil([&] { return session->colorOf(3) == Color::kWhite; }));
+    std::optional<Message> reply = lastMessageToSync(transport, 3);
+    REQUIRE(reply.has_value());
+    REQUIRE(std::holds_alternative<Matched>(*reply));
+    CHECK(std::get<Matched>(*reply).color == Color::kWhite);
+    CHECK(std::get<Matched>(*reply).opponentName == "Bob");
+}
+
+TEST_CASE("entering a named room seats the first two arrivals and spectates the rest") {
+    std::ostringstream quiet;
+    Logger log{"TEST", quiet};
+    FakeServerTransport transport;
+    FakeUserStore users;
+    Matchmaker matchmaker;
+    SessionManager sessions{transport, users, log};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
+    joinAs(transport, 1, "Alice");
+    joinAs(transport, 2, "Bob");
+    joinAs(transport, 3, "Carol");
+
+    transport.receive(1, encode(Message{EnterRoomRequest{"lounge"}}));
+    transport.receive(2, encode(Message{EnterRoomRequest{"lounge"}}));
+    transport.receive(3, encode(Message{EnterRoomRequest{"lounge"}}));
+
+    // Entering a room creates a live GameSession whose own thread starts
+    // ticking (and sending) immediately, so replies must be read through the
+    // same synchronized copy that thread's send() calls are guarded by — a
+    // raw read here would race it, exactly like the reconnect test above.
+    std::optional<Message> first = lastMessageToSync(transport, 1);
+    std::optional<Message> second = lastMessageToSync(transport, 2);
+    std::optional<Message> third = lastMessageToSync(transport, 3);
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+    REQUIRE(third.has_value());
+    REQUIRE(std::holds_alternative<RoomJoined>(*first));
+    REQUIRE(std::holds_alternative<RoomJoined>(*second));
+    REQUIRE(std::holds_alternative<RoomJoined>(*third));
+    CHECK(std::get<RoomJoined>(*first).role == Role::kWhite);
+    CHECK(std::get<RoomJoined>(*second).role == Role::kBlack);
+    CHECK(std::get<RoomJoined>(*third).role == Role::kSpectator);
+    CHECK_FALSE(std::get<RoomJoined>(*third).color.has_value());
+
+    // The spectator is still wired into the session's broadcasts.
+    REQUIRE(waitUntil([&] { return lastSnapshotTo(transport, 3).has_value(); }));
+}
+
+TEST_CASE("a move sent by a room spectator is dropped, leaving the board unchanged") {
+    std::ostringstream quiet;
+    Logger log{"TEST", quiet};
+    FakeServerTransport transport;
+    FakeUserStore users;
+    Matchmaker matchmaker;
+    SessionManager sessions{transport, users, log};
+    RoomRegistry rooms{sessions, boardWithRook()};
+    ServerApp app{transport, log, matchmaker, sessions, users, rooms};
+    joinAs(transport, 1, "Alice");
+    joinAs(transport, 2, "Bob");
+    joinAs(transport, 3, "Carol");
+    transport.receive(1, encode(Message{EnterRoomRequest{"lounge"}}));
+    transport.receive(2, encode(Message{EnterRoomRequest{"lounge"}}));
+    transport.receive(3, encode(Message{EnterRoomRequest{"lounge"}}));
+    REQUIRE(waitUntil([&] { return lastSnapshotTo(transport, 3).has_value(); }));
+
+    transport.receive(3, encode(Message{MoveIntent{Position{4, 4}, Position{4, 5}}}));
+
+    // Give the session's own thread a few ticks to prove nothing moved, rather
+    // than asserting on the very next (already-in-flight) snapshot.
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::optional<GameStateView> state = lastSnapshotTo(transport, 3);
+    REQUIRE(state.has_value());
+    REQUIRE_FALSE(state->pieces.empty());
+    CHECK(state->pieces.front().cell == Position{4, 4});
+    CHECK_FALSE(state->pieces.front().movingTo.has_value());
 }

@@ -10,6 +10,7 @@
 
 using kfc::input::NetworkLobbySink;
 using kfc::protocol::decode;
+using kfc::protocol::EnterRoomRequest;
 using kfc::protocol::Message;
 using kfc::protocol::PlayRequest;
 using kfc::test::FakeClientTransport;
@@ -26,11 +27,15 @@ TEST_CASE("requesting to play sends a decodable PlayRequest") {
     CHECK(std::holds_alternative<PlayRequest>(*message));
 }
 
-TEST_CASE("requesting to enter a room sends nothing yet") {
+TEST_CASE("requesting to enter a room sends a decodable EnterRoomRequest carrying its name") {
     FakeClientTransport transport;
     NetworkLobbySink sink{transport};
 
     sink.requestEnterRoom("dojo");
 
-    CHECK(transport.sent.empty());
+    REQUIRE(transport.sent.size() == 1);
+    std::optional<Message> message = decode(transport.sent.front());
+    REQUIRE(message.has_value());
+    REQUIRE(std::holds_alternative<EnterRoomRequest>(*message));
+    CHECK(std::get<EnterRoomRequest>(*message).roomName == "dojo");
 }

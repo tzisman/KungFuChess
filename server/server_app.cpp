@@ -15,12 +15,14 @@ constexpr char kUsernameTakenReason[] = "username_taken";
 }  // namespace
 
 ServerApp::ServerApp(net::ServerTransport& transport, common::Logger& log,
-                     Matchmaker& matchmaker, SessionManager& sessions, UserStore& users)
+                     Matchmaker& matchmaker, SessionManager& sessions, UserStore& users,
+                     RoomRegistry& rooms)
     : transport_(transport),
       log_(log),
       matchmaker_(matchmaker),
       sessions_(sessions),
-      users_(users) {
+      users_(users),
+      rooms_(rooms) {
     transport_.onOpen([this](net::ConnectionId id) { onOpen(id); });
     transport_.onMessage([this](net::ConnectionId id, const std::string& text) {
         onMessage(id, text);
@@ -58,6 +60,10 @@ void ServerApp::onMessage(net::ConnectionId id, const std::string& text) {
         handleJump(id, *jump);
         return;
     }
+    if (const auto* enterRoom = std::get_if<protocol::EnterRoomRequest>(&*message)) {
+        handleEnterRoom(id, *enterRoom);
+        return;
+    }
     log_.info("connection " + std::to_string(id) + " sent an unexpected message");
 }
 
@@ -87,6 +93,17 @@ void ServerApp::handleLogin(net::ConnectionId id, const protocol::LoginRequest& 
     logins_.emplace(id, Session{id, user->username});
     log_.info(user->username + " logged in (connection " + std::to_string(id) + ")");
     transport_.send(id, protocol::encode(protocol::LoggedIn{user->rating}));
+
+    reconnectIfSeated(id, user->username);
+}
+
+void ServerApp::reconnectIfSeated(net::ConnectionId id, const std::string& username) {
+    std::optional<SessionManager::Seat> seat = sessions_.seatFor(username);
+    if (!seat) return;
+    seat->session->reconnect(id, seat->color);
+    std::string opponent = seat->session->usernameOf(model::opposite(seat->color)).value_or("");
+    log_.info(username + " reconnected to a game in progress (connection " + std::to_string(id) + ")");
+    transport_.send(id, protocol::encode(protocol::Matched{seat->color, opponent}));
 }
 
 void ServerApp::handlePlay(net::ConnectionId id) {
@@ -115,6 +132,35 @@ void ServerApp::handleJump(net::ConnectionId id, const protocol::JumpIntent& int
     std::optional<model::Color> color = session->colorOf(id);
     if (!color) return;
     session->submit(JumpCommand{*color, intent.cell});
+}
+
+namespace {
+std::string roleName(protocol::Role role) {
+    switch (role) {
+        case protocol::Role::kWhite: return "White";
+        case protocol::Role::kBlack: return "Black";
+        case protocol::Role::kSpectator: return "Spectator";
+    }
+    return "Spectator";
+}
+}  // namespace
+
+void ServerApp::handleEnterRoom(net::ConnectionId id, const protocol::EnterRoomRequest& request) {
+    auto it = logins_.find(id);
+    if (it == logins_.end()) {
+        log_.info("connection " + std::to_string(id) + " requested to enter a room without logging in");
+        return;
+    }
+    std::optional<int> rating = users_.ratingOf(it->second.username);
+    if (!rating) return;
+
+    RoomRegistry::Entry entry = rooms_.enter(request.roomName, id, it->second.username, *rating);
+    if (entry.role == protocol::Role::kSpectator) {
+        if (GameSession* session = sessions_.find(entry.match)) session->addSpectator(id);
+    }
+    log_.info(it->second.username + " entered room '" + request.roomName + "' as " +
+              roleName(entry.role));
+    transport_.send(id, protocol::encode(protocol::RoomJoined{entry.role, entry.color}));
 }
 
 void ServerApp::onClose(net::ConnectionId id) {

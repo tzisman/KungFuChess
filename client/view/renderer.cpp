@@ -29,6 +29,13 @@ constexpr int kGameOverThickness = 4;
 constexpr int kGameOverOutlineThickness = 12;
 constexpr int kTextFont = cv::FONT_HERSHEY_SIMPLEX;
 
+constexpr double kOverlayWidthFraction = 0.6;
+const cv::Scalar kOverlayColour{255, 255, 255, 255};
+const cv::Scalar kOverlayOutlineColour{0, 0, 200, 255};
+constexpr int kOverlayThickness = 2;
+constexpr int kOverlayOutlineThickness = 6;
+constexpr int kOverlayMarginBelowTop = 30;
+
 const cv::Scalar kCanvasColour{240, 240, 240, 255};
 const cv::Scalar kPanelTextColour{20, 20, 20, 255};
 constexpr int kPanelTextThickness = 1;
@@ -61,7 +68,8 @@ Renderer::Renderer(const std::string& boardImagePath,
 // The board is laid onto the canvas where the geometry says it sits, and every
 // other measurement follows from that same geometry, so nothing here needs to
 // know that anything is drawn beside the board.
-Img Renderer::render(const GameSnapshot& snapshot, int nowMs) const {
+Img Renderer::render(const GameSnapshot& snapshot, int nowMs,
+                     const std::optional<std::string>& overlayText) const {
     Img canvas;
     canvas.blank(layout_.canvasWidth(), layout_.canvasHeight(), kCanvasColour);
 
@@ -76,6 +84,7 @@ Img Renderer::render(const GameSnapshot& snapshot, int nowMs) const {
     if (snapshot.selectedCell) drawSelection(canvas, *snapshot.selectedCell);
     drawPanels(canvas, snapshot.players);
     if (snapshot.gameOver) drawGameOver(canvas);
+    if (overlayText) drawOverlayText(canvas, *overlayText);
     return canvas;
 }
 
@@ -277,6 +286,23 @@ void Renderer::drawGameOver(Img& canvas) const {
                     kGameOverOutlineThickness);
     canvas.put_text(kGameOverText, x, y, scale, kGameOverColour,
                     kGameOverThickness);
+}
+
+// Sits above the board rather than over its centre, so it never fights
+// drawGameOver for the same space when a countdown's forfeit ends the game.
+void Renderer::drawOverlayText(Img& canvas, const std::string& text) const {
+    int baseline = 0;
+    cv::Size unscaled = cv::getTextSize(text, kTextFont, 1.0,
+                                        kOverlayOutlineThickness, &baseline);
+    double scale = kOverlayWidthFraction * geometry_.imageWidth() / unscaled.width;
+
+    cv::Size sized = cv::getTextSize(text, kTextFont, scale,
+                                     kOverlayOutlineThickness, &baseline);
+    int x = geometry_.origin().x + (geometry_.imageWidth() - sized.width) / 2;
+    int y = geometry_.origin().y + kOverlayMarginBelowTop + sized.height;
+
+    canvas.put_text(text, x, y, scale, kOverlayOutlineColour, kOverlayOutlineThickness);
+    canvas.put_text(text, x, y, scale, kOverlayColour, kOverlayThickness);
 }
 
 }

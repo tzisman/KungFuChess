@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -16,13 +17,16 @@ namespace kfc::view {
 // game: it reads the state it is handed and paints it, down to the wording of
 // the log. Every call produces a new image, so a rendered frame is never
 // mutated after the fact. nowMs is the display clock used to page looping
-// animations; per-piece timing comes from the snapshot itself.
+// animations; per-piece timing comes from the snapshot itself. overlayText,
+// when present, is drawn over the board — the caller (not the renderer)
+// decides what it says and when it applies, e.g. a disconnect countdown.
 class Renderer {
 public:
     Renderer(const std::string& boardImagePath, const SpriteLibrary& sprites,
              BoardGeometry geometry, PanelLayout layout);
 
-    Img render(const GameSnapshot& snapshot, int nowMs) const;
+    Img render(const GameSnapshot& snapshot, int nowMs,
+              const std::optional<std::string>& overlayText = std::nullopt) const;
 
 private:
     static Animation animationFor(model::PieceState state);
@@ -33,6 +37,7 @@ private:
                          const std::vector<model::Position>& cells) const;
     void drawSelection(Img& canvas, model::Position cell) const;
     void drawGameOver(Img& canvas) const;
+    void drawOverlayText(Img& canvas, const std::string& text) const;
     void drawPanels(Img& canvas, const std::vector<PlayerView>& players) const;
     void drawPanel(Img& canvas, const PlayerView& player, Pixel at) const;
     void drawMoveTable(Img& canvas, const std::vector<MoveLine>& moves,

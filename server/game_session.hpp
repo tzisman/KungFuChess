@@ -60,6 +60,21 @@ public:
     bool ownsConnection(net::ConnectionId id) const;
     std::optional<model::Color> colorOf(net::ConnectionId id) const;
 
+    // Adds a non-playing observer: it receives every broadcast snapshot but
+    // never claims a colour, so the existing "no colour, no move" guard in
+    // ServerApp already keeps it from ever moving a piece.
+    void addSpectator(net::ConnectionId id);
+
+    // This username's colour, if it holds a seat here — regardless of
+    // whether its connection is currently live. Lets a fresh login be
+    // matched back to a match it was disconnected from, since the dead
+    // connection id it seated under is no use for that lookup anymore.
+    std::optional<model::Color> colorOfUsername(const std::string& username) const;
+
+    // The username seated at the given colour, if any. Used to name the
+    // opponent when routing a reconnect straight back into the game.
+    std::optional<std::string> usernameOf(model::Color color) const;
+
     // Starts a 20-second countdown toward a forfeit for the connection's
     // colour. A no-op if the connection isn't seated.
     void onDisconnect(net::ConnectionId id);
@@ -92,6 +107,7 @@ private:
     // this state needs real synchronization, not just atomics.
     mutable std::mutex mutex_;
     std::vector<PlayerSlot> players_;
+    std::vector<net::ConnectionId> spectators_;
     product::ScoreBoard scores_;
     product::MoveLog moveLog_;
     engine::GameEngine engine_;

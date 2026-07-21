@@ -69,4 +69,14 @@ std::optional<MatchId> SessionManager::matchIdFor(net::ConnectionId connection) 
     return std::nullopt;
 }
 
+std::optional<SessionManager::Seat> SessionManager::seatFor(const std::string& username) {
+    std::lock_guard<std::mutex> lock{mutex_};
+    for (auto& [id, session] : sessions_) {
+        if (std::optional<model::Color> color = session->colorOfUsername(username)) {
+            return Seat{session.get(), *color};
+        }
+    }
+    return std::nullopt;
+}
+
 }

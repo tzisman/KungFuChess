@@ -10,11 +10,11 @@
 
 #include "app/composition.hpp"
 #include "common/logger.hpp"
-#include "img.hpp"
 #include "input/controller.hpp"
 #include "input/lobby_mapper.hpp"
 #include "input/network_command_sink.hpp"
 #include "input/network_lobby_sink.hpp"
+#include "input/text_prompt_buffer.hpp"
 #include "model/board.hpp"
 #include "model/piece.hpp"
 #include "net/websocketpp_transport.hpp"
@@ -23,13 +23,12 @@
 #include "protocol/messages.hpp"
 #include "protocol/wire_snapshot.hpp"
 #include "rules/rule_engine.hpp"
-#include "view/board_geometry.hpp"
+#include "view/countdown_overlay.hpp"
 #include "view/game_snapshot.hpp"
 #include "view/lobby_renderer.hpp"
 #include "view/lobby_snapshot.hpp"
-#include "view/panel_layout.hpp"
-#include "view/renderer.hpp"
-#include "view/sprite_library.hpp"
+#include "view/resize_watcher.hpp"
+#include "view/text_prompt.hpp"
 #include "view/window.hpp"
 
 namespace {
@@ -41,10 +40,15 @@ constexpr char kWindowTitle[] = "KungFuChess (client)";
 constexpr int kBoardDisplaySize = 435;
 constexpr int kFrameDelayMs = 30;
 constexpr int kAuthPollMs = 20;
+// The server broadcasts a CountdownTick once a second while a disconnect
+// countdown runs; if none has arrived for longer than that, the countdown is
+// over (reconnect or forfeit) and the overlay should stop showing it.
+constexpr int kCountdownStaleMs = 1500;
 constexpr int kQuitKey = 27;  // Esc
 constexpr char kWaitingForOpponentStatus[] = "Waiting for an opponent...";
 constexpr char kNoOpponentStatus[] = "No opponent found. Try again.";
-constexpr char kRoomsNotAvailableStatus[] = "Rooms are coming soon.";
+constexpr char kEnterRoomPromptLabel[] = "Enter room name, then press Enter:";
+constexpr char kJoiningRoomStatus[] = "Joining room...";
 
 using Clock = std::chrono::steady_clock;
 
@@ -62,6 +66,45 @@ void dispatch(const kfc::view::MouseEvent& event,
     } else {
         controller.handleClick(event.x, event.y);
     }
+}
+
+// Checks whether the window has settled at a new size and, if so, rebuilds
+// everything measured from it: the shared presentation (so the lobby and
+// room-prompt screens follow immediately), and, once a match is underway,
+// the game view and the controller's click mapping. Finishes by snapping the
+// window to the exact natural size for the new height, so what's on screen
+// is never a stretched or letterboxed copy of what was actually rendered.
+void handleResize(kfc::view::Window& window, kfc::view::ResizeWatcher& watcher,
+                  int elapsedMs, const std::string& boardImagePath,
+                  const std::string& piecesRoot,
+                  kfc::app::Presentation& presentation,
+                  kfc::view::LobbyRenderer& lobbyRenderer,
+                  kfc::view::TextPromptRenderer& roomPromptRenderer,
+                  std::optional<kfc::app::GameView>& gameView,
+                  std::optional<kfc::input::Controller>& controller) {
+    std::optional<kfc::view::WindowSize> settled =
+        watcher.poll(window.contentSize(), elapsedMs);
+    if (!settled) return;
+
+    int boardCols = gameView ? gameView->geometry.cols() : 0;
+    int boardRows = gameView ? gameView->geometry.rows() : 0;
+
+    presentation = kfc::app::buildPresentation(boardImagePath, settled->height);
+    lobbyRenderer = kfc::view::LobbyRenderer{presentation.layout.canvasWidth(),
+                                             presentation.layout.canvasHeight()};
+    roomPromptRenderer = kfc::view::TextPromptRenderer{
+        presentation.layout.canvasWidth(), presentation.layout.canvasHeight()};
+
+    if (gameView) {
+        gameView.emplace(boardImagePath, piecesRoot, presentation, boardCols,
+                         boardRows);
+        controller->setGeometry(gameView->geometry);
+    }
+
+    kfc::view::WindowSize natural{presentation.layout.canvasWidth(),
+                                  presentation.layout.canvasHeight()};
+    window.resizeTo(natural);
+    watcher.reset(natural);
 }
 
 // Mirrors the wire read-model's pieces into a local Board, so the one existing
@@ -91,6 +134,15 @@ bool isPlainAscii(const std::string& text) {
         if (c < 0x20 || c > 0x7E) return false;
     }
     return true;
+}
+
+std::string roomRoleName(kfc::protocol::Role role) {
+    switch (role) {
+        case kfc::protocol::Role::kWhite: return "White";
+        case kfc::protocol::Role::kBlack: return "Black";
+        case kfc::protocol::Role::kSpectator: return "Spectator";
+    }
+    return "Spectator";
 }
 
 // The same legality the offline path gets from GameEngine::legalDestinationsFrom
@@ -165,13 +217,17 @@ void resetAuthOutcome(AuthOutcome& outcome) {
 // or the connection drops. A dropped connection has nothing left to retry
 // against, so it ends the process; a rejection returns false so the caller
 // can ask for different credentials.
-bool awaitRegistration(AuthOutcome& outcome) {
+bool awaitRegistration(AuthOutcome& outcome, kfc::common::Logger& log) {
     while (true) {
         {
             std::lock_guard<std::mutex> lock{outcome.mutex};
-            if (outcome.registered) return true;
+            if (outcome.registered) {
+                log.info("registration succeeded");
+                return true;
+            }
             if (outcome.authRejection) {
                 std::cout << "Registration rejected: " << *outcome.authRejection << "\n";
+                log.info("registration rejected: " + *outcome.authRejection);
                 return false;
             }
             if (outcome.closed) {
@@ -187,13 +243,17 @@ bool awaitRegistration(AuthOutcome& outcome) {
 // rejects it (bad credentials), or the connection drops. A bad login returns
 // nullopt so the caller can ask again; a dropped connection has nothing left
 // to retry against, so that ends the process instead.
-std::optional<int> awaitLogin(AuthOutcome& outcome) {
+std::optional<int> awaitLogin(AuthOutcome& outcome, kfc::common::Logger& log) {
     while (true) {
         {
             std::lock_guard<std::mutex> lock{outcome.mutex};
-            if (outcome.rating) return outcome.rating;
+            if (outcome.rating) {
+                log.info("login succeeded, rating " + std::to_string(*outcome.rating));
+                return outcome.rating;
+            }
             if (outcome.authRejection) {
                 std::cout << "Login rejected: " << *outcome.authRejection << "\n";
+                log.info("login rejected: " + *outcome.authRejection);
                 return std::nullopt;
             }
             if (outcome.closed) {
@@ -219,7 +279,7 @@ void askForCredentialsUntilLoggedIn(kfc::net::WebsocketppClient& transport,
             log.info("registering as " + creds.username);
             transport.send(kfc::protocol::encode(kfc::protocol::Message{
                 kfc::protocol::RegisterRequest{creds.username, creds.password}}));
-            if (!awaitRegistration(outcome)) continue;
+            if (!awaitRegistration(outcome, log)) continue;
             std::cout << "Registered. Logging in...\n";
         }
 
@@ -227,7 +287,7 @@ void askForCredentialsUntilLoggedIn(kfc::net::WebsocketppClient& transport,
         log.info("logging in as " + creds.username);
         transport.send(kfc::protocol::encode(
             kfc::protocol::Message{kfc::protocol::LoginRequest{creds.username, creds.password}}));
-        if (awaitLogin(outcome)) return;
+        if (awaitLogin(outcome, log)) return;
     }
 }
 
@@ -237,6 +297,24 @@ struct MatchOutcome {
     std::mutex mutex;
     std::optional<kfc::protocol::Matched> matched;
     bool noOpponent = false;
+};
+
+// Filled in from the network thread as the server answers an EnterRoomRequest,
+// and read by the main thread each frame while it shows the room-name prompt.
+struct RoomOutcome {
+    std::mutex mutex;
+    std::optional<kfc::protocol::RoomJoined> joined;
+};
+
+// Filled in from the network thread each time a CountdownTick arrives, and
+// read by the main thread every frame while it shows the game screen.
+// lastUpdate lets the main thread notice staleness itself (see
+// kCountdownStaleMs) — the server never sends an explicit "cancelled"
+// message for a countdown a reconnect called off.
+struct CountdownState {
+    std::mutex mutex;
+    std::optional<int> secondsLeft;
+    Clock::time_point lastUpdate;
 };
 
 }  // namespace
@@ -255,6 +333,8 @@ int main() {
 
     AuthOutcome outcome;
     MatchOutcome matchOutcome;
+    RoomOutcome roomOutcome;
+    CountdownState countdown;
     std::mutex stateMutex;
     std::optional<kfc::product::GameStateView> latest;
 
@@ -268,7 +348,8 @@ int main() {
         std::lock_guard<std::mutex> lock{outcome.mutex};
         outcome.closed = true;
     });
-    transport.onMessage([&outcome, &matchOutcome, &stateMutex, &latest](const std::string& text) {
+    transport.onMessage([&log, &outcome, &matchOutcome, &roomOutcome, &countdown, &stateMutex,
+                         &latest](const std::string& text) {
         if (std::optional<kfc::protocol::Message> message = kfc::protocol::decode(text)) {
             if (const auto* loggedIn = std::get_if<kfc::protocol::LoggedIn>(&*message)) {
                 std::lock_guard<std::mutex> lock{outcome.mutex};
@@ -281,11 +362,23 @@ int main() {
                 std::lock_guard<std::mutex> lock{outcome.mutex};
                 outcome.authRejection = authRejected->reason;
             } else if (const auto* matched = std::get_if<kfc::protocol::Matched>(&*message)) {
+                log.info(std::string{"matched as "} + kfc::model::nameOf(matched->color) +
+                         " against " + matched->opponentName);
                 std::lock_guard<std::mutex> lock{matchOutcome.mutex};
                 matchOutcome.matched = *matched;
             } else if (std::get_if<kfc::protocol::NoOpponent>(&*message)) {
+                log.info("no opponent found");
                 std::lock_guard<std::mutex> lock{matchOutcome.mutex};
                 matchOutcome.noOpponent = true;
+            } else if (const auto* roomJoined = std::get_if<kfc::protocol::RoomJoined>(&*message)) {
+                log.info("room joined as " + roomRoleName(roomJoined->role));
+                std::lock_guard<std::mutex> lock{roomOutcome.mutex};
+                roomOutcome.joined = *roomJoined;
+            } else if (const auto* tick = std::get_if<kfc::protocol::CountdownTick>(&*message)) {
+                std::lock_guard<std::mutex> lock{countdown.mutex};
+                if (!countdown.secondsLeft) log.info("disconnect countdown observed");
+                countdown.secondsLeft = tick->secondsLeft;
+                countdown.lastUpdate = Clock::now();
             }
             return;
         }
@@ -301,26 +394,35 @@ int main() {
     std::thread network([&transport] { transport.run(); });
 
     askForCredentialsUntilLoggedIn(transport, log, outcome);
+    std::optional<int> myRating;
+    {
+        std::lock_guard<std::mutex> lock{outcome.mutex};
+        myRating = outcome.rating;
+    }
 
-    Img boardImage;
-    boardImage.read(kBoardImagePath, {kBoardDisplaySize, kBoardDisplaySize},
-                    /*keep_aspect=*/true);
-    kfc::view::PanelLayout layout{boardImage.get_mat().cols,
-                                  boardImage.get_mat().rows};
+    kfc::app::Presentation presentation =
+        kfc::app::buildPresentation(kBoardImagePath, kBoardDisplaySize);
     kfc::view::Window window{kWindowTitle};
-    kfc::view::LobbyRenderer lobbyRenderer{layout.canvasWidth(), layout.canvasHeight()};
+    kfc::view::LobbyRenderer lobbyRenderer{presentation.layout.canvasWidth(),
+                                           presentation.layout.canvasHeight()};
+    kfc::view::TextPromptRenderer roomPromptRenderer{
+        presentation.layout.canvasWidth(), presentation.layout.canvasHeight()};
+    kfc::view::ResizeWatcher resizeWatcher{
+        {presentation.layout.canvasWidth(), presentation.layout.canvasHeight()}};
 
-    enum class Screen { kLobby, kGame };
+    enum class Screen { kLobby, kEnterRoom, kGame };
     Screen screen = Screen::kLobby;
     std::optional<std::string> lobbyStatus;
-    kfc::model::Color myColor = kfc::model::Color::kWhite;
+    std::optional<kfc::model::Color> myColor;
+    kfc::input::TextPromptBuffer roomNameBuffer;
+    bool roomRequestSent = false;
 
     // Built lazily once the board's dimensions are known from the first
     // snapshot after a match is found.
-    std::optional<kfc::view::SpriteLibrary> sprites;
-    std::optional<kfc::view::Renderer> renderer;
+    std::optional<kfc::app::GameView> gameView;
     std::optional<kfc::model::Board> board;
     std::optional<kfc::input::Controller> controller;
+    bool gameOverLogged = false;
 
     Clock::time_point start = Clock::now();
     while (true) {
@@ -336,22 +438,38 @@ int main() {
             }
         }
 
+        if (screen == Screen::kEnterRoom) {
+            std::lock_guard<std::mutex> lock{roomOutcome.mutex};
+            if (roomOutcome.joined) {
+                myColor = roomOutcome.joined->color;
+                screen = Screen::kGame;
+                roomOutcome.joined.reset();
+            }
+        }
+
         if (screen == Screen::kLobby) {
             for (const kfc::view::MouseEvent& event : window.takeMouseEvents()) {
                 if (event.type != kfc::view::MouseEvent::Type::kClick) continue;
                 switch (kfc::input::hitTest(lobbyRenderer.layout(), event.x, event.y)) {
                     case kfc::input::LobbyAction::kPlay:
+                        log.info("PLAY pressed");
                         lobbySink.requestPlay();
                         lobbyStatus = kWaitingForOpponentStatus;
                         break;
                     case kfc::input::LobbyAction::kEnterRoom:
-                        lobbyStatus = kRoomsNotAvailableStatus;
+                        screen = Screen::kEnterRoom;
+                        roomNameBuffer.clear();
+                        roomRequestSent = false;
                         break;
                     case kfc::input::LobbyAction::kNone:
                         break;
                 }
             }
-            window.show(lobbyRenderer.render(kfc::view::LobbyFrame{lobbyStatus}));
+            window.show(lobbyRenderer.render(kfc::view::LobbyFrame{myRating, lobbyStatus}));
+        } else if (screen == Screen::kEnterRoom) {
+            window.show(roomPromptRenderer.render(
+                roomRequestSent ? kJoiningRoomStatus : kEnterRoomPromptLabel,
+                roomNameBuffer.text()));
         } else {
             std::optional<kfc::product::GameStateView> current;
             {
@@ -360,19 +478,19 @@ int main() {
             }
 
             if (current) {
-                if (!renderer) {
-                    kfc::view::BoardGeometry geometry{
-                        boardImage.get_mat().cols, boardImage.get_mat().rows,
-                        current->boardWidth, current->boardHeight,
-                        layout.boardOrigin()};
-                    sprites.emplace(kPiecesRoot, geometry.cellWidth(),
-                                    geometry.cellHeight());
-                    renderer.emplace(kBoardImagePath, *sprites, geometry, layout);
+                if (!gameView) {
+                    gameView.emplace(kBoardImagePath, kPiecesRoot, presentation,
+                                     current->boardWidth, current->boardHeight);
                     board.emplace(current->boardWidth, current->boardHeight);
-                    controller.emplace(kfc::app::makeController(*board, commands,
-                                                                geometry, myColor));
+                    controller.emplace(kfc::app::makeController(
+                        *board, commands, gameView->geometry, myColor,
+                        /*interactive=*/myColor.has_value()));
                 }
                 syncBoard(*board, current->pieces);
+                if (current->gameOver && !gameOverLogged) {
+                    log.info("game over");
+                    gameOverLogged = true;
+                }
 
                 for (const kfc::view::MouseEvent& event : window.takeMouseEvents()) {
                     dispatch(event, *controller);
@@ -384,15 +502,40 @@ int main() {
                         legalDestinationsFrom(*board, *selection, current->gameOver);
                 }
 
-                window.show(renderer->render(
+                std::optional<std::string> overlayText;
+                {
+                    std::lock_guard<std::mutex> lock{countdown.mutex};
+                    if (countdown.secondsLeft &&
+                        elapsedMsSince(countdown.lastUpdate) < kCountdownStaleMs) {
+                        overlayText = kfc::view::countdownText(*countdown.secondsLeft);
+                    }
+                }
+
+                window.show(gameView->renderer.render(
                     kfc::view::buildSnapshot(std::move(*current),
                                              controller->selection(),
                                              std::move(moveTargets)),
-                    elapsedMsSince(start)));
+                    elapsedMsSince(start), overlayText));
             }
         }
 
-        if (window.waitKey(kFrameDelayMs) == kQuitKey) break;
+        // Checked only after a frame has actually been shown: a WINDOW_NORMAL
+        // window adopts the size of the first image shown into it, so this
+        // is the first point at which its content size reliably reflects
+        // something real rather than a toolkit default.
+        handleResize(window, resizeWatcher, kFrameDelayMs, kBoardImagePath,
+                    kPiecesRoot, presentation, lobbyRenderer,
+                    roomPromptRenderer, gameView, controller);
+
+        int key = window.waitKey(kFrameDelayMs);
+        if (screen == Screen::kEnterRoom && !roomRequestSent) {
+            if (roomNameBuffer.handleKey(key) && !roomNameBuffer.text().empty()) {
+                log.info("entering room '" + roomNameBuffer.text() + "'");
+                lobbySink.requestEnterRoom(roomNameBuffer.text());
+                roomRequestSent = true;
+            }
+        }
+        if (key == kQuitKey) break;
     }
 
     transport.stop();

@@ -110,6 +110,37 @@ TEST_CASE("claiming an already-claimed colour fails") {
     CHECK_FALSE(game.ownsConnection(2));
 }
 
+TEST_CASE("a spectator connection never gets a colour") {
+    std::ostringstream quiet;
+    Logger log{"TEST", quiet};
+    FakeServerTransport transport;
+    FakeUserStore users;
+    GameSession game{transport, boardWithRook(), {}, users, log};
+
+    game.addSpectator(3);
+
+    CHECK_FALSE(game.ownsConnection(3));
+    CHECK_FALSE(game.colorOf(3).has_value());
+}
+
+TEST_CASE("a tick also sends the snapshot to spectators, alongside the seated players") {
+    std::ostringstream quiet;
+    Logger log{"TEST", quiet};
+    FakeServerTransport transport;
+    FakeUserStore users;
+    GameSession game{transport, boardWithRook(), {}, users, log};
+    game.claimColor(Color::kWhite, 1, "Alice", kStartingRating);
+    game.claimColor(Color::kBlack, 2, "Bob", kStartingRating);
+    game.addSpectator(3);
+
+    game.tick(0);
+
+    std::optional<GameStateView> forSpectator = lastSnapshotTo(transport, 3);
+    REQUIRE(forSpectator.has_value());
+    REQUIRE(forSpectator->pieces.size() == 1);
+    CHECK(forSpectator->pieces.front().cell == Position{4, 4});
+}
+
 TEST_CASE("a tick sends a decodable snapshot to every seated participant") {
     std::ostringstream quiet;
     Logger log{"TEST", quiet};
@@ -284,6 +315,23 @@ TEST_CASE("reconnecting before the countdown ends cancels it and the game contin
     CHECK_FALSE(game.isFinished());
     CHECK(game.ownsConnection(3));
     CHECK_FALSE(game.ownsConnection(1));
+}
+
+TEST_CASE("a seated username's colour is found by name, even while its connection is down") {
+    std::ostringstream quiet;
+    Logger log{"TEST", quiet};
+    FakeServerTransport transport;
+    FakeUserStore users;
+    GameSession game{transport, boardWithRook(), {}, users, log};
+    game.claimColor(Color::kWhite, 1, "Alice", kStartingRating);
+    game.claimColor(Color::kBlack, 2, "Bob", kStartingRating);
+    game.onDisconnect(1);
+
+    CHECK(game.colorOfUsername("Alice") == Color::kWhite);
+    CHECK(game.colorOfUsername("Bob") == Color::kBlack);
+    CHECK_FALSE(game.colorOfUsername("Carol").has_value());
+    CHECK(game.usernameOf(Color::kWhite) == "Alice");
+    CHECK(game.usernameOf(Color::kBlack) == "Bob");
 }
 
 TEST_CASE("a game that ends by forfeit updates both players' ratings through the UserStore") {

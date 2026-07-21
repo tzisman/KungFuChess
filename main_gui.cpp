@@ -9,7 +9,6 @@
 
 #include "app/composition.hpp"
 #include "engine/game_engine.hpp"
-#include "img.hpp"
 #include "input/controller.hpp"
 #include "input/engine_command_sink.hpp"
 #include "io/board_parser.hpp"
@@ -20,11 +19,8 @@
 #include "product/move_log.hpp"
 #include "product/score_board.hpp"
 #include "realtime/motion.hpp"
-#include "view/board_geometry.hpp"
 #include "view/game_snapshot.hpp"
-#include "view/panel_layout.hpp"
-#include "view/renderer.hpp"
-#include "view/sprite_library.hpp"
+#include "view/resize_watcher.hpp"
 #include "view/window.hpp"
 
 namespace {
@@ -34,9 +30,9 @@ constexpr char kPiecesRoot[] = "images/pieces3";
 constexpr char kStartBoardPath[] = "texttests/start.txt";
 constexpr char kWindowTitle[] = "KungFuChess";
 
-// How large the board is drawn on screen. The window sizes itself to the
-// picture, so this is the one number to change to get a bigger or smaller
-// board; everything else is measured from it.
+// How large the board is drawn on screen at startup; everything else is
+// measured from it. The window is user-resizable from there on — see
+// handleResize below.
 constexpr int kBoardDisplaySize = 435;
 
 constexpr int kFrameDelayMs = 30;
@@ -95,6 +91,33 @@ int elapsedMsSince(Clock::time_point& last) {
     return elapsed;
 }
 
+// Checks whether the window has settled at a new size and, if so, rebuilds
+// the game view in place at that size and re-points the controller's click
+// mapping to match. Finishes by snapping the window to the exact natural
+// size for the new height, so what's on screen is never a stretched or
+// letterboxed copy of what was actually rendered.
+void handleResize(kfc::view::Window& window, kfc::view::ResizeWatcher& watcher,
+                  int elapsedMs, const std::string& boardImagePath,
+                  const std::string& piecesRoot,
+                  const kfc::model::Board& board,
+                  kfc::app::Presentation& presentation,
+                  std::optional<kfc::app::GameView>& gameView,
+                  kfc::input::Controller& controller) {
+    std::optional<kfc::view::WindowSize> settled =
+        watcher.poll(window.contentSize(), elapsedMs);
+    if (!settled) return;
+
+    presentation = kfc::app::buildPresentation(boardImagePath, settled->height);
+    gameView.emplace(boardImagePath, piecesRoot, presentation, board.width(),
+                     board.height());
+    controller.setGeometry(gameView->geometry);
+
+    kfc::view::WindowSize natural{presentation.layout.canvasWidth(),
+                                  presentation.layout.canvasHeight()};
+    window.resizeTo(natural);
+    watcher.reset(natural);
+}
+
 }  // namespace
 
 int main() {
@@ -117,25 +140,19 @@ int main() {
         moveLog.subscribeTo(engine.events());
         const kfc::model::Board& board = engine.board();
 
-
-        Img boardImage;
-        boardImage.read(kBoardImagePath, {kBoardDisplaySize, kBoardDisplaySize},
-                        /*keep_aspect=*/true);
-        kfc::view::PanelLayout layout{boardImage.get_mat().cols,
-                                      boardImage.get_mat().rows};
-        kfc::view::BoardGeometry geometry{
-            boardImage.get_mat().cols, boardImage.get_mat().rows, board.width(),
-            board.height(), layout.boardOrigin()};
-
-        kfc::view::SpriteLibrary sprites{kPiecesRoot, geometry.cellWidth(),
-                                         geometry.cellHeight()};
-        kfc::view::Renderer renderer{kBoardImagePath, sprites, geometry,
-                                     layout};
+        kfc::app::Presentation presentation =
+            kfc::app::buildPresentation(kBoardImagePath, kBoardDisplaySize);
+        std::optional<kfc::app::GameView> gameView;
+        gameView.emplace(kBoardImagePath, kPiecesRoot, presentation,
+                         board.width(), board.height());
         kfc::view::Window window{kWindowTitle};
+        kfc::view::ResizeWatcher resizeWatcher{
+            {presentation.layout.canvasWidth(),
+             presentation.layout.canvasHeight()}};
 
         kfc::input::EngineCommandSink commands{engine};
         kfc::input::Controller controller =
-            kfc::app::makeController(board, commands, geometry);
+            kfc::app::makeController(board, commands, gameView->geometry);
 
         Clock::time_point start = Clock::now();
         Clock::time_point last = start;
@@ -144,16 +161,24 @@ int main() {
                 dispatch(event, controller);
             }
 
-            engine.advance(elapsedMsSince(last));
+            int elapsed = elapsedMsSince(last);
+            engine.advance(elapsed);
 
             int nowMs = static_cast<int>(
                 std::chrono::duration_cast<std::chrono::milliseconds>(last -
                                                                       start)
                     .count());
-            window.show(renderer.render(
+            window.show(gameView->renderer.render(
                 kfc::view::buildSnapshot(engine, controller.selection(), scores,
                                          moveLog),
                 nowMs));
+
+            // Checked only after a frame has actually been shown: a
+            // WINDOW_NORMAL window adopts the size of the first image shown
+            // into it, so this is the first point at which its content size
+            // reliably reflects something real rather than a toolkit default.
+            handleResize(window, resizeWatcher, elapsed, kBoardImagePath,
+                        kPiecesRoot, board, presentation, gameView, controller);
 
             if (window.waitKey(kFrameDelayMs) == kQuitKey) break;
         }

@@ -9,6 +9,7 @@
 #include "net/websocketpp_transport.hpp"
 #include "realtime/motion.hpp"
 #include "server/matchmaker.hpp"
+#include "server/room_registry.hpp"
 #include "server/scheduler.hpp"
 #include "server/server_app.hpp"
 #include "server/session_manager.hpp"
@@ -39,7 +40,8 @@ int main() {
     kfc::server::SqliteUserStore users{kUserDbPath};
     kfc::server::SessionManager sessions{transport, users, log};
     kfc::server::Matchmaker matchmaker;
-    kfc::server::ServerApp app{transport, log, matchmaker, sessions, users};
+    kfc::server::RoomRegistry rooms{sessions, parsed.board};
+    kfc::server::ServerApp app{transport, log, matchmaker, sessions, users, rooms};
     kfc::server::Scheduler scheduler{matchmaker, sessions, transport,
                                      std::move(parsed.board), {}, log};
 

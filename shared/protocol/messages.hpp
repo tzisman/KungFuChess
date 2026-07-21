@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <variant>
 
@@ -68,10 +69,26 @@ struct CountdownTick {
     int secondsLeft;
 };
 
+// A connection's seat in a room. Spectator is a network/session concept, not a
+// model::Color, so it lives here rather than in Business Logic.
+enum class Role { kWhite, kBlack, kSpectator };
+
+// Client -> Server: join (or create) the named room.
+struct EnterRoomRequest {
+    std::string roomName;
+};
+
+// Server -> Client: the seat granted in the room just entered. `color` is
+// empty when `role` is kSpectator.
+struct RoomJoined {
+    Role role;
+    std::optional<model::Color> color;
+};
+
 // One of anything that can cross the wire. Decoding yields whichever it is; the
 // receiver dispatches on the alternative.
 using Message = std::variant<RegisterRequest, LoginRequest, Registered, AuthRejected,
                               LoggedIn, PlayRequest, Matched, NoOpponent, MoveIntent,
-                              JumpIntent, CountdownTick>;
+                              JumpIntent, CountdownTick, EnterRoomRequest, RoomJoined>;
 
 }

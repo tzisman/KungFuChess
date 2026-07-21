@@ -65,6 +65,27 @@ std::optional<model::Color> GameSession::colorOf(net::ConnectionId id) const {
     return std::nullopt;
 }
 
+std::optional<model::Color> GameSession::colorOfUsername(const std::string& username) const {
+    std::lock_guard<std::mutex> lock{mutex_};
+    for (const PlayerSlot& player : players_) {
+        if (player.username == username) return player.color;
+    }
+    return std::nullopt;
+}
+
+void GameSession::addSpectator(net::ConnectionId id) {
+    std::lock_guard<std::mutex> lock{mutex_};
+    spectators_.push_back(id);
+}
+
+std::optional<std::string> GameSession::usernameOf(model::Color color) const {
+    std::lock_guard<std::mutex> lock{mutex_};
+    for (const PlayerSlot& player : players_) {
+        if (player.color == color) return player.username;
+    }
+    return std::nullopt;
+}
+
 void GameSession::onDisconnect(net::ConnectionId id) {
     std::lock_guard<std::mutex> lock{mutex_};
     auto it = std::find_if(players_.begin(), players_.end(),
@@ -191,6 +212,9 @@ void GameSession::broadcastState() {
     std::string payload = protocol::encodeSnapshot(state);
     for (const PlayerSlot& player : players_) {
         transport_.send(player.connection, payload);
+    }
+    for (net::ConnectionId spectator : spectators_) {
+        transport_.send(spectator, payload);
     }
 }
 

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "img.hpp"
+#include "view/resize_watcher.hpp"
 
 namespace kfc::view {
 
@@ -32,6 +33,14 @@ public:
     // Pumps the window's events and waits up to waitMs for a key. Pass 0 to
     // wait indefinitely. Returns the key code, or -1 if none was pressed.
     int waitKey(int waitMs) const;
+
+    // The window's current content area, in pixels — what the user has
+    // dragged it to, independent of whatever size was last shown into it.
+    WindowSize contentSize() const;
+
+    // Snaps the window to an exact content size, e.g. after a resize has
+    // settled and the view has been rebuilt to fit it precisely.
+    void resizeTo(WindowSize size);
 
     // Hands over the mouse events collected since the last call, leaving none
     // behind. Events are queued rather than dispatched so that the window need

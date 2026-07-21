@@ -24,6 +24,8 @@ constexpr char kFromKey[] = "from";
 constexpr char kToKey[] = "to";
 constexpr char kCellKey[] = "cell";
 constexpr char kSecondsLeftKey[] = "seconds_left";
+constexpr char kRoomNameKey[] = "room_name";
+constexpr char kRoleKey[] = "role";
 
 constexpr char kRegisterType[] = "register";
 constexpr char kLoginType[] = "login";
@@ -36,6 +38,12 @@ constexpr char kNoOpponentType[] = "no_opponent";
 constexpr char kMoveType[] = "move";
 constexpr char kJumpType[] = "jump";
 constexpr char kCountdownTickType[] = "countdown_tick";
+constexpr char kEnterRoomType[] = "enter_room";
+constexpr char kRoomJoinedType[] = "room_joined";
+
+constexpr char kWhiteRole[] = "white";
+constexpr char kBlackRole[] = "black";
+constexpr char kSpectatorRole[] = "spectator";
 
 std::string encodeColor(model::Color color) {
     return std::string(1, io::colorLetter(color));
@@ -46,6 +54,24 @@ std::optional<model::Color> decodeColor(const json& value) {
     const std::string letter = value.get<std::string>();
     if (letter.size() != 1) return std::nullopt;
     return io::colorFromLetter(letter[0]);
+}
+
+std::string encodeRole(Role role) {
+    switch (role) {
+        case Role::kWhite: return kWhiteRole;
+        case Role::kBlack: return kBlackRole;
+        case Role::kSpectator: return kSpectatorRole;
+    }
+    return kSpectatorRole;
+}
+
+std::optional<Role> decodeRole(const json& value) {
+    if (!value.is_string()) return std::nullopt;
+    const std::string name = value.get<std::string>();
+    if (name == kWhiteRole) return Role::kWhite;
+    if (name == kBlackRole) return Role::kBlack;
+    if (name == kSpectatorRole) return Role::kSpectator;
+    return std::nullopt;
 }
 
 struct EncodeVisitor {
@@ -89,6 +115,14 @@ struct EncodeVisitor {
     }
     json operator()(const CountdownTick& message) const {
         return {{kTypeKey, kCountdownTickType}, {kSecondsLeftKey, message.secondsLeft}};
+    }
+    json operator()(const EnterRoomRequest& message) const {
+        return {{kTypeKey, kEnterRoomType}, {kRoomNameKey, message.roomName}};
+    }
+    json operator()(const RoomJoined& message) const {
+        json result{{kTypeKey, kRoomJoinedType}, {kRoleKey, encodeRole(message.role)}};
+        if (message.color) result[kColorKey] = encodeColor(*message.color);
+        return result;
     }
 };
 
@@ -176,6 +210,22 @@ std::optional<Message> decode(const std::string& text) {
         if (std::optional<int> secondsLeft = intField(parsed, kSecondsLeftKey))
             return Message{CountdownTick{*secondsLeft}};
         return std::nullopt;
+    }
+    if (*type == kEnterRoomType) {
+        if (std::optional<std::string> roomName = stringField(parsed, kRoomNameKey))
+            return Message{EnterRoomRequest{*roomName}};
+        return std::nullopt;
+    }
+    if (*type == kRoomJoinedType) {
+        if (!parsed.contains(kRoleKey)) return std::nullopt;
+        std::optional<Role> role = decodeRole(parsed[kRoleKey]);
+        if (!role) return std::nullopt;
+        std::optional<model::Color> color;
+        if (parsed.contains(kColorKey)) {
+            color = decodeColor(parsed[kColorKey]);
+            if (!color) return std::nullopt;
+        }
+        return Message{RoomJoined{*role, color}};
     }
     return std::nullopt;
 }

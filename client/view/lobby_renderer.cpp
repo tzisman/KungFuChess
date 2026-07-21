@@ -17,9 +17,15 @@ constexpr int kButtonTextThickness = 2;
 constexpr double kStatusTextScale = 0.6;
 constexpr int kStatusTextThickness = 1;
 constexpr int kStatusMarginBelowButtons = 40;
+const cv::Scalar kRatingTextColour{20, 20, 20, 255};
+constexpr double kRatingTextScale = 0.6;
+constexpr int kRatingTextThickness = 1;
+constexpr int kRatingMarginX = 20;
+constexpr int kRatingMarginY = 30;
 
 constexpr char kPlayLabel[] = "PLAY";
 constexpr char kEnterRoomLabel[] = "ENTER ROOM";
+constexpr char kRatingLabel[] = "ELO: ";
 
 }  // namespace
 
@@ -30,6 +36,7 @@ Img LobbyRenderer::render(const LobbyFrame& frame) const {
     Img canvas;
     canvas.blank(layout_.canvasWidth(), layout_.canvasHeight(), kCanvasColour);
 
+    if (frame.rating) drawRating(canvas, *frame.rating);
     drawButton(canvas, layout_.play(), kPlayLabel);
     drawButton(canvas, layout_.enterRoom(), kEnterRoomLabel);
     if (frame.statusMessage) drawStatus(canvas, *frame.statusMessage);
@@ -49,6 +56,11 @@ void LobbyRenderer::drawButton(Img& canvas, const LobbyButtonRect& rect,
     int x = rect.x + (rect.width - text.width) / 2;
     int y = rect.y + (rect.height + text.height) / 2;
     canvas.put_text(label, x, y, kButtonTextScale, kButtonTextColour, kButtonTextThickness);
+}
+
+void LobbyRenderer::drawRating(Img& canvas, int rating) const {
+    canvas.put_text(std::string(kRatingLabel) + std::to_string(rating), kRatingMarginX,
+                    kRatingMarginY, kRatingTextScale, kRatingTextColour, kRatingTextThickness);
 }
 
 void LobbyRenderer::drawStatus(Img& canvas, const std::string& message) const {

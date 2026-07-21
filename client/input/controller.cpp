@@ -1,14 +1,22 @@
 #include "input/controller.hpp"
 
+#include <utility>
+
 #include "model/piece.hpp"
 
 namespace kfc::input {
 
 Controller::Controller(const model::Board& board, CommandSink& commands,
-                       BoardMapper mapper, std::optional<model::Color> myColor)
-    : board_(board), commands_(commands), mapper_(mapper), myColor_(myColor) {}
+                       BoardMapper mapper, std::optional<model::Color> myColor,
+                       bool interactive)
+    : board_(board),
+      commands_(commands),
+      mapper_(mapper),
+      myColor_(myColor),
+      interactive_(interactive) {}
 
 void Controller::handleClick(int x, int y) {
+    if (!interactive_) return;
     std::optional<model::Position> cell = mapper_.toCell(x, y);
     if (!selected_) {
         handleFirstClick(cell);
@@ -18,12 +26,17 @@ void Controller::handleClick(int x, int y) {
 }
 
 void Controller::handleJump(int x, int y) {
+    if (!interactive_) return;
     std::optional<model::Position> cell = mapper_.toCell(x, y);
     if (cell) commands_.requestJump(*cell);
 }
 
 const std::optional<model::Position>& Controller::selection() const {
     return selected_;
+}
+
+void Controller::setGeometry(view::BoardGeometry geometry) {
+    mapper_.setGeometry(std::move(geometry));
 }
 
 void Controller::handleFirstClick(std::optional<model::Position> cell) {

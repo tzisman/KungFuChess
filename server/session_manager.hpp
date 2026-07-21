@@ -10,6 +10,7 @@
 
 #include "common/logger.hpp"
 #include "model/board.hpp"
+#include "model/piece.hpp"
 #include "net/transport.hpp"
 #include "realtime/motion.hpp"
 #include "server/game_session.hpp"
@@ -40,6 +41,14 @@ public:
     GameSession* find(MatchId id);
     GameSession* sessionFor(net::ConnectionId connection);
     std::optional<MatchId> matchIdFor(net::ConnectionId connection) const;
+
+    // Where a username holds a seat right now, live match or not — used to
+    // route a fresh login from a disconnected player back into their game.
+    struct Seat {
+        GameSession* session;
+        model::Color color;
+    };
+    std::optional<Seat> seatFor(const std::string& username);
 
 private:
     net::ServerTransport& transport_;

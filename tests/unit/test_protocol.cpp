@@ -14,6 +14,7 @@ using kfc::protocol::AuthRejected;
 using kfc::protocol::CountdownTick;
 using kfc::protocol::decode;
 using kfc::protocol::encode;
+using kfc::protocol::EnterRoomRequest;
 using kfc::protocol::JumpIntent;
 using kfc::protocol::LoggedIn;
 using kfc::protocol::LoginRequest;
@@ -24,6 +25,8 @@ using kfc::protocol::NoOpponent;
 using kfc::protocol::PlayRequest;
 using kfc::protocol::Registered;
 using kfc::protocol::RegisterRequest;
+using kfc::protocol::Role;
+using kfc::protocol::RoomJoined;
 
 TEST_CASE("a register request round-trips carrying username and password") {
     std::optional<Message> decoded =
@@ -122,6 +125,39 @@ TEST_CASE("a countdown tick round-trips carrying the seconds left") {
     CHECK(std::get<CountdownTick>(*decoded).secondsLeft == 12);
 }
 
+TEST_CASE("an enter-room request round-trips carrying the room name") {
+    std::optional<Message> decoded =
+        decode(encode(Message{EnterRoomRequest{"lounge"}}));
+
+    REQUIRE(decoded.has_value());
+    REQUIRE(std::holds_alternative<EnterRoomRequest>(*decoded));
+    CHECK(std::get<EnterRoomRequest>(*decoded).roomName == "lounge");
+}
+
+TEST_CASE("a room-joined notice round-trips carrying the colour for a player seat") {
+    for (Color color : {Color::kWhite, Color::kBlack}) {
+        Role role = color == Color::kWhite ? Role::kWhite : Role::kBlack;
+        std::optional<Message> decoded =
+            decode(encode(Message{RoomJoined{role, color}}));
+
+        REQUIRE(decoded.has_value());
+        REQUIRE(std::holds_alternative<RoomJoined>(*decoded));
+        CHECK(std::get<RoomJoined>(*decoded).role == role);
+        REQUIRE(std::get<RoomJoined>(*decoded).color.has_value());
+        CHECK(*std::get<RoomJoined>(*decoded).color == color);
+    }
+}
+
+TEST_CASE("a room-joined notice round-trips with no colour for a spectator seat") {
+    std::optional<Message> decoded =
+        decode(encode(Message{RoomJoined{Role::kSpectator, std::nullopt}}));
+
+    REQUIRE(decoded.has_value());
+    REQUIRE(std::holds_alternative<RoomJoined>(*decoded));
+    CHECK(std::get<RoomJoined>(*decoded).role == Role::kSpectator);
+    CHECK_FALSE(std::get<RoomJoined>(*decoded).color.has_value());
+}
+
 TEST_CASE("decoding rejects malformed or unknown input") {
     CHECK_FALSE(decode("not json").has_value());
     CHECK_FALSE(decode("{}").has_value());
@@ -132,4 +168,6 @@ TEST_CASE("decoding rejects malformed or unknown input") {
     CHECK_FALSE(decode(R"({"type":"move","from":{"row":1,"col":4}})")
                     .has_value());  // missing to
     CHECK_FALSE(decode(R"({"type":"jump"})").has_value());  // missing cell
+    CHECK_FALSE(decode(R"({"type":"enter_room"})").has_value());  // missing room_name
+    CHECK_FALSE(decode(R"({"type":"room_joined","role":"x"})").has_value());  // bad role
 }
