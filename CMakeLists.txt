@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(KungFuChess LANGUAGES CXX)
+project(KungFuChess LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +22,15 @@ target_include_directories(kfc_img PUBLIC
     ${OpenCV_INCLUDE_DIRS}
 )
 target_link_libraries(kfc_img PUBLIC ${OpenCV_LIBS})
+
+# Vendored SQLite amalgamation (single .c/.h pair, same vendoring approach as
+# doctest/nlohmann above). Quarantined in its own target so that consumers who
+# only need account storage link this directly, without pulling in the rest of
+# third_party. SQLITE_THREADSAFE=1 is required because later phases run each
+# GameSession on its own thread, all sharing one SQLite connection.
+add_library(sqlite3 third_party/sqlite/sqlite3.c)
+target_include_directories(sqlite3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sqlite)
+target_compile_definitions(sqlite3 PUBLIC SQLITE_THREADSAFE=1)
 
 # Networking transport dependency, vendored header-only under third_party/asio
 # and third_party/websocketpp. Quarantined in its own target exactly like OpenCV
@@ -127,6 +136,8 @@ add_library(kfc_server
     server/player_names.cpp
     server/server_app.cpp
     server/game_session.cpp
+    server/elo.cpp
+    server/password_hash.cpp
 )
 target_link_libraries(kfc_server PUBLIC kfc_protocol kfc_common)
 
@@ -173,6 +184,8 @@ add_executable(unit_tests
     tests/unit/test_player_names.cpp
     tests/unit/test_server_app.cpp
     tests/unit/test_game_session.cpp
+    tests/unit/test_elo.cpp
+    tests/unit/test_password_hash.cpp
 )
 target_link_libraries(unit_tests PRIVATE doctest kfc kfc_protocol kfc_server)
 
