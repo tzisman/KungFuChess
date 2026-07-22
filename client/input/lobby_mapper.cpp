@@ -3,7 +3,7 @@
 namespace kfc::input {
 namespace {
 
-bool contains(const view::LobbyButtonRect& rect, int x, int y) {
+bool contains(const view::ScreenRect& rect, int x, int y) {
     return x >= rect.x && x < rect.x + rect.width && y >= rect.y &&
            y < rect.y + rect.height;
 }

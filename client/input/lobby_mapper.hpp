@@ -1,6 +1,6 @@
 #pragma once
 
-#include "view/lobby_layout.hpp"
+#include "view/screens/screen_layout.hpp"
 
 namespace kfc::input {
 

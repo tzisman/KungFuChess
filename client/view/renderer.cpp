@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "view/text.hpp"
 #include "view/theme.hpp"
 
 namespace kfc::view {
@@ -147,26 +148,21 @@ void Renderer::drawCoordinates(Img& canvas) const {
 
 void Renderer::drawCoordLabel(Img& canvas, const std::string& label,
                               Pixel centre, double scale) const {
-    int baseline = 0;
-    cv::Size size =
-        cv::getTextSize(label, kTextFont, scale, kCoordThickness, &baseline);
-    canvas.put_text(label, centre.x - size.width / 2,
-                    centre.y + size.height / 2, scale, kCoordTextColour,
+    drawCentredText(canvas, label, centre.x,
+                    centre.y + coordTextHeight() / 2, scale, kCoordTextColour,
                     kCoordThickness);
 }
 
+int Renderer::coordTextHeight() const {
+    return static_cast<int>(layout_.coordGutter() * kCoordHeightFraction);
+}
+
 double Renderer::coordFontScale() const {
-    int baseline = 0;
-    cv::Size unit = cv::getTextSize(kFontHeightSample, kTextFont, 1.0,
-                                    kCoordThickness, &baseline);
-    return layout_.coordGutter() * kCoordHeightFraction / unit.height;
+    return scaleForHeight(coordTextHeight(), kCoordThickness);
 }
 
 double Renderer::fontScale() const {
-    int baseline = 0;
-    cv::Size unit = cv::getTextSize(kFontHeightSample, kTextFont, 1.0,
-                                    kPanelTextThickness, &baseline);
-    return static_cast<double>(layout_.textHeight()) / unit.height;
+    return scaleForHeight(layout_.textHeight(), kPanelTextThickness);
 }
 
 void Renderer::drawLine(Img& canvas, const std::string& text, Pixel at) const {

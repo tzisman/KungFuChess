@@ -3,10 +3,11 @@
 #include <string>
 
 #include "img.hpp"
+#include "view/screens/screen_layout.hpp"
 
 namespace kfc::view {
 
-// Draws the "enter room name" screen: a prompt label above a box holding
+// Draws the "enter room name" screen: a prompt label above a field holding
 // whatever has been typed so far. Display only — client/input/text_prompt_
 // buffer.hpp owns the actual keystroke accumulation.
 class TextPromptRenderer {
@@ -16,8 +17,9 @@ public:
     Img render(const std::string& prompt, const std::string& typedSoFar) const;
 
 private:
-    int canvasWidth_;
-    int canvasHeight_;
+    void drawField(Img& canvas, const std::string& typedSoFar) const;
+
+    PromptLayout layout_;
 };
 
 }

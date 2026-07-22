@@ -4,7 +4,17 @@
       "Bash(python -c ' *)",
       "Bash(PATH=/c/msys64/mingw64/bin:__TRACKED_VAR__ ./probe.exe)",
       "Bash(rm -f \"C:/Users/User/AppData/Local/Temp/claude/d--programming-KungFuChess/1eaef8b3-d63b-4699-80d2-d91c9dbdd312/scratchpad/probe\"*.exe)",
-      "Bash(git -C /d/programming/KungFuChess diff --stat client/view client/app main_gui.cpp tests/)"
+      "Bash(git -C /d/programming/KungFuChess diff --stat client/view client/app main_gui.cpp tests/)",
+      "Bash(cmake ..)",
+      "Bash(cmake --build . --target unit_tests kfc_view)",
+      "Bash(sed -i '7d' client/view/screens/lobby_renderer.cpp)",
+      "Bash(sed -i '6d' client/view/screens/text_prompt.cpp)",
+      "Bash(sed -i '4d' tests/unit/test_prompt_layout.cpp)",
+      "Bash(sed -n '5,100p' tests/unit/test_prompt_layout.cpp > /tmp/prompt_tests.txt && cat tests/unit/test_lobby_layout.cpp /tmp/prompt_tests.txt > tests/unit/test_screen_layout.cpp && rm tests/unit/test_lobby_layout.cpp tests/unit/test_prompt_layout.cpp && head -12 tests/unit/test_screen_layout.cpp && echo \"...\" && sed -n '55,75p' tests/unit/test_screen_layout.cpp)",
+      "Bash(cmake --build . --target unit_tests kfc_view kungfu_chess_client kungfu_chess_gui kungfu_chess)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

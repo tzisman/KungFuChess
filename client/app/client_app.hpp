@@ -14,9 +14,9 @@
 #include "input/text_prompt_buffer.hpp"
 #include "model/board.hpp"
 #include "model/piece.hpp"
-#include "view/lobby_renderer.hpp"
+#include "view/screens/lobby_renderer.hpp"
 #include "view/resize_watcher.hpp"
-#include "view/text_prompt.hpp"
+#include "view/screens/text_prompt.hpp"
 #include "view/window.hpp"
 
 namespace kfc::app {

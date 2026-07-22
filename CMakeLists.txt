@@ -84,7 +84,8 @@ add_library(kfc
     client/view/board_geometry.cpp
     client/view/panel_layout.cpp
     client/view/game_snapshot.cpp
-    client/view/lobby_layout.cpp
+    client/view/screens/screen_layout.cpp
+    client/view/screens/rating_tier.cpp
     client/view/countdown_overlay.cpp
     client/view/resize_watcher.cpp
     logic/io/piece_codec.cpp
@@ -124,8 +125,10 @@ add_library(kfc_view
     client/view/sprite_library.cpp
     client/view/renderer.cpp
     client/view/window.cpp
-    client/view/lobby_renderer.cpp
-    client/view/text_prompt.cpp
+    client/view/text.cpp
+    client/view/screens/screen_chrome.cpp
+    client/view/screens/lobby_renderer.cpp
+    client/view/screens/text_prompt.cpp
     client/app/composition.cpp
 )
 target_link_libraries(kfc_view PUBLIC kfc kfc_img)
@@ -199,6 +202,8 @@ add_executable(unit_tests
     tests/unit/test_board_mapper.cpp
     tests/unit/test_controller.cpp
     tests/unit/test_lobby_mapper.cpp
+    tests/unit/test_screen_layout.cpp
+    tests/unit/test_rating_tier.cpp
     tests/unit/test_countdown_overlay.cpp
     tests/unit/test_text_prompt_buffer.cpp
     tests/unit/test_network_command_sink.cpp

@@ -34,6 +34,7 @@ private:
     void drawCoordinates(Img& canvas) const;
     void drawCoordLabel(Img& canvas, const std::string& label, Pixel centre,
                         double scale) const;
+    int coordTextHeight() const;
     double coordFontScale() const;
     void drawPiece(Img& canvas, const PieceView& piece, int nowMs) const;
     Pixel centeredIn(Pixel cellTopLeft, const Img& sprite) const;

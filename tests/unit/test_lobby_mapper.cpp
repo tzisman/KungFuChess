@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "input/lobby_mapper.hpp"
-#include "view/lobby_layout.hpp"
+#include "view/screens/screen_layout.hpp"
 
 using kfc::input::hitTest;
 using kfc::input::LobbyAction;

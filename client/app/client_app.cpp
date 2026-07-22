@@ -8,7 +8,7 @@
 #include "rules/rule_engine.hpp"
 #include "view/countdown_overlay.hpp"
 #include "view/game_snapshot.hpp"
-#include "view/lobby_snapshot.hpp"
+#include "view/screens/lobby_renderer.hpp"
 
 namespace kfc::app {
 namespace {

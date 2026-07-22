@@ -21,11 +21,6 @@ constexpr char kStartBoardPath[] = "texttests/start.txt";
 constexpr char kUserDbPath[] = "kungfu_chess.db";
 }
 
-// Composition root of the server. It owns the concrete transport, the join
-// logic (ServerApp), the SessionManager holding whatever concurrent matches
-// exist, and the Scheduler that services matchmaking on its own timer. The
-// network event loop and the scheduler each run on their own thread; the main
-// thread simply blocks on the network loop.
 int main() {
     kfc::common::Logger log{"SERVER"};
 
