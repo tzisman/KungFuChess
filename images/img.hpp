@@ -36,6 +36,17 @@ public:
                const cv::Scalar& color = cv::Scalar(0, 0, 0, 255));
 
     /**
+     * Stretch this image in place to an exact pixel size, ignoring its
+     * current aspect ratio.
+     *
+     * @param width Target width in pixels
+     * @param height Target height in pixels
+     * @param interpolation OpenCV interpolation flag
+     * @return Reference to this object for method chaining
+     */
+    Img& resizeTo(int width, int height, int interpolation = cv::INTER_LINEAR);
+
+    /**
      * Draw this image onto another image at position (x, y)
      *
      * @param other_img The target image to draw on

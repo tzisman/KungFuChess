@@ -44,6 +44,18 @@ Img& Img::blank(int width, int height, const cv::Scalar& color) {
     return *this;
 }
 
+Img& Img::resizeTo(int width, int height, int interpolation) {
+    if (img.empty()) {
+        throw std::runtime_error("Image not loaded.");
+    }
+    if (width <= 0 || height <= 0) {
+        throw std::runtime_error("Image size must be positive.");
+    }
+
+    cv::resize(img, img, cv::Size(width, height), 0, 0, interpolation);
+    return *this;
+}
+
 void Img::draw_on(Img& other_img, int x, int y) {
     if (img.empty() || other_img.img.empty()) {
         throw std::runtime_error("Both images must be loaded before drawing.");

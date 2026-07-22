@@ -30,8 +30,12 @@ public:
     std::optional<WindowSize> poll(WindowSize current, int elapsedMs);
 
     // Adopts size as already-settled, without reporting it. Used after the
-    // caller has itself resized the window to match a rebuilt view, so that
-    // echo is not mistaken for a new user-driven resize.
+    // caller has itself resized the window to match a rebuilt view: pass the
+    // size actually read back from the window afterward, not the size that
+    // was requested — the two can differ (DPI scaling, border/title-bar
+    // insets), and seeding this from the requested size instead of the real
+    // one leaves a permanent gap that poll() reads as a fresh user resize
+    // every cycle, drifting the window further each time.
     void reset(WindowSize size);
 
 private:

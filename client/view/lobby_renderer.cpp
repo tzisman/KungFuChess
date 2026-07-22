@@ -12,8 +12,13 @@ const cv::Scalar kButtonTextColour{20, 20, 20, 255};
 const cv::Scalar kStatusTextColour{40, 40, 200, 255};
 constexpr int kButtonOutlineThickness = 2;
 constexpr int kTextFont = cv::FONT_HERSHEY_SIMPLEX;
-constexpr double kButtonTextScale = 0.7;
 constexpr int kButtonTextThickness = 2;
+
+// A capital of the button font, measured to turn a wanted text height into
+// the scale the font must be drawn at — so the label grows with the button
+// instead of staying a fixed size while the button around it resizes.
+constexpr char kFontHeightSample[] = "0";
+constexpr double kButtonTextHeightFraction = 0.35;
 constexpr double kStatusTextScale = 0.6;
 constexpr int kStatusTextThickness = 1;
 constexpr int kStatusMarginBelowButtons = 40;
@@ -43,6 +48,13 @@ Img LobbyRenderer::render(const LobbyFrame& frame) const {
     return canvas;
 }
 
+double LobbyRenderer::buttonTextScale(int buttonHeight) const {
+    int baseline = 0;
+    cv::Size unit = cv::getTextSize(kFontHeightSample, kTextFont, 1.0,
+                                    kButtonTextThickness, &baseline);
+    return buttonHeight * kButtonTextHeightFraction / unit.height;
+}
+
 void LobbyRenderer::drawButton(Img& canvas, const LobbyButtonRect& rect,
                                const std::string& label) const {
     cv::Mat pixels = canvas.get_mat();
@@ -50,12 +62,13 @@ void LobbyRenderer::drawButton(Img& canvas, const LobbyButtonRect& rect,
     cv::rectangle(pixels, box, kButtonColour, cv::FILLED);
     cv::rectangle(pixels, box, kButtonOutlineColour, kButtonOutlineThickness);
 
+    double textScale = buttonTextScale(rect.height);
     int baseline = 0;
-    cv::Size text = cv::getTextSize(label, kTextFont, kButtonTextScale,
+    cv::Size text = cv::getTextSize(label, kTextFont, textScale,
                                     kButtonTextThickness, &baseline);
     int x = rect.x + (rect.width - text.width) / 2;
     int y = rect.y + (rect.height + text.height) / 2;
-    canvas.put_text(label, x, y, kButtonTextScale, kButtonTextColour, kButtonTextThickness);
+    canvas.put_text(label, x, y, textScale, kButtonTextColour, kButtonTextThickness);
 }
 
 void LobbyRenderer::drawRating(Img& canvas, int rating) const {

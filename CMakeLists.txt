@@ -170,7 +170,12 @@ target_link_libraries(kungfu_chess_server PRIVATE kfc_server kfc_net kfc_sqlite_
 # Composition root of the networked client: a display-only window fed by the
 # server's snapshots. It links the view, the wire protocol and the transport,
 # but never the engine — the authoritative game lives on the server.
-add_executable(kungfu_chess_client main_client.cpp)
+add_executable(kungfu_chess_client
+    main_client.cpp
+    client/app/network_session.cpp
+    client/app/auth_flow.cpp
+    client/app/client_app.cpp
+)
 target_link_libraries(kungfu_chess_client PRIVATE kfc_view kfc_protocol kfc_net kfc_common)
 
 # Unit tests. Each tests/unit/test_<module>.cpp is registered here.

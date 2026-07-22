@@ -95,7 +95,11 @@ int elapsedMsSince(Clock::time_point& last) {
 // the game view in place at that size and re-points the controller's click
 // mapping to match. Finishes by snapping the window to the exact natural
 // size for the new height, so what's on screen is never a stretched or
-// letterboxed copy of what was actually rendered.
+// letterboxed copy of what was actually rendered — then re-syncs the watcher
+// from the size the window actually reports afterward, not the size that was
+// requested, since the two can differ (DPI scaling, border/title-bar insets)
+// and seeding from the request instead of reality reads as a fresh resize
+// every cycle, drifting the window further on every frame.
 void handleResize(kfc::view::Window& window, kfc::view::ResizeWatcher& watcher,
                   int elapsedMs, const std::string& boardImagePath,
                   const std::string& piecesRoot,
@@ -115,7 +119,7 @@ void handleResize(kfc::view::Window& window, kfc::view::ResizeWatcher& watcher,
     kfc::view::WindowSize natural{presentation.layout.canvasWidth(),
                                   presentation.layout.canvasHeight()};
     window.resizeTo(natural);
-    watcher.reset(natural);
+    watcher.reset(window.contentSize());
 }
 
 }  // namespace

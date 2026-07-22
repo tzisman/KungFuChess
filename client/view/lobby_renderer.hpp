@@ -23,6 +23,7 @@ private:
                     const std::string& label) const;
     void drawStatus(Img& canvas, const std::string& message) const;
     void drawRating(Img& canvas, int rating) const;
+    double buttonTextScale(int buttonHeight) const;
 
     LobbyLayout layout_;
 };

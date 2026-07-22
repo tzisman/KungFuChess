@@ -28,6 +28,16 @@ public:
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
 
+    // Shows frame scaled as one block (never stretched unevenly) to the
+    // largest size that fits the window's current content area, letterboxed
+    // to fill any leftover space on whichever axis has slack. This makes a
+    // resize drag read as the picture scaling continuously with the cursor,
+    // rather than snapping only once the view is next rebuilt at the new size
+    // (rebuilding reloads every sprite from disk, so it is throttled to fire
+    // only once dragging settles — see ResizeWatcher). Always showing a frame
+    // whose pixel size matches the content area exactly also keeps a
+    // WINDOW_NORMAL window from resizing itself to match the frame, which
+    // imshow does whenever the two sizes differ.
     void show(const Img& frame);
 
     // Pumps the window's events and waits up to waitMs for a key. Pass 0 to
@@ -39,7 +49,9 @@ public:
     WindowSize contentSize() const;
 
     // Snaps the window to an exact content size, e.g. after a resize has
-    // settled and the view has been rebuilt to fit it precisely.
+    // settled and the view has been rebuilt to fit it precisely. Read
+    // contentSize() again afterward rather than assuming it lands exactly on
+    // size — the toolkit doesn't always echo back exactly what was asked for.
     void resizeTo(WindowSize size);
 
     // Hands over the mouse events collected since the last call, leaving none
