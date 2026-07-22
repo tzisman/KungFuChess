@@ -21,6 +21,12 @@ struct WindowSize {
 // held steady for kSettleMs, so an expensive rebuild of the view (which
 // reloads every piece sprite from disk) never fires on the intermediate sizes
 // of an in-progress drag.
+//
+// A reported size is adopted as the new baseline, so each size the user comes
+// to rest at is reported exactly once. Nothing may push a size back onto the
+// window in response: the window's size is the user's alone, and a size
+// written back would return through poll() as a fresh resize, rebuilding the
+// view again with nobody touching anything.
 class ResizeWatcher {
 public:
     explicit ResizeWatcher(WindowSize initial);
@@ -28,15 +34,6 @@ public:
     // elapsedMs is the time since the previous call. Returns the settled size
     // exactly once, the moment it stabilizes; nullopt otherwise.
     std::optional<WindowSize> poll(WindowSize current, int elapsedMs);
-
-    // Adopts size as already-settled, without reporting it. Used after the
-    // caller has itself resized the window to match a rebuilt view: pass the
-    // size actually read back from the window afterward, not the size that
-    // was requested — the two can differ (DPI scaling, border/title-bar
-    // insets), and seeding this from the requested size instead of the real
-    // one leaves a permanent gap that poll() reads as a fresh user resize
-    // every cycle, drifting the window further each time.
-    void reset(WindowSize size);
 
 private:
     WindowSize pending_;

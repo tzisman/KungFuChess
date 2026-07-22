@@ -2,10 +2,11 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "view/theme.hpp"
+
 namespace kfc::view {
 namespace {
 
-const cv::Scalar kCanvasColour{240, 240, 240, 255};
 const cv::Scalar kBoxColour{255, 255, 255, 255};
 const cv::Scalar kBoxOutlineColour{20, 20, 20, 255};
 const cv::Scalar kPromptTextColour{20, 20, 20, 255};

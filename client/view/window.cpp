@@ -2,74 +2,36 @@
 
 #include <opencv2/highgui.hpp>
 
-#include <algorithm>
-#include <cmath>
 #include <utility>
 
 namespace kfc::view {
-namespace {
 
-// Matches the neutral canvas colour every renderer fills its background
-// with, so the bars this pads with disappear into the surrounding frame
-// instead of reading as a visibly different colour.
-const cv::Scalar kLetterboxColour{240, 240, 240, 255};
-
-// Scales frame up or down as one block — never stretching width and height by
-// different factors, which would distort it — to the largest size that fits
-// inside target, then centres it on a target-sized canvas. Whichever axis
-// has slack is padded rather than cropped, so scaling never overflows target
-// regardless of how the window's current aspect ratio compares to the
-// frame's.
-Img fitToSize(const Img& frame, WindowSize target) {
-    const cv::Mat& pixels = frame.get_mat();
-    double scale =
-        std::min(static_cast<double>(target.width) / pixels.cols,
-                 static_cast<double>(target.height) / pixels.rows);
-    int scaledWidth = std::clamp(
-        static_cast<int>(std::lround(pixels.cols * scale)), 1, target.width);
-    int scaledHeight = std::clamp(
-        static_cast<int>(std::lround(pixels.rows * scale)), 1, target.height);
-
-    Img scaled = frame.clone();
-    scaled.resizeTo(scaledWidth, scaledHeight);
-
-    Img canvas;
-    canvas.blank(target.width, target.height, kLetterboxColour);
-    scaled.draw_on(canvas, (target.width - scaledWidth) / 2,
-                   (target.height - scaledHeight) / 2);
-    return canvas;
-}
-
-}  // namespace
-
-Window::Window(std::string title) : title_(std::move(title)) {
+Window::Window(std::string title, WindowSize initial)
+    : title_(std::move(title)) {
     cv::namedWindow(title_, cv::WINDOW_NORMAL);
+    cv::resizeWindow(title_, initial.width, initial.height);
     cv::setMouseCallback(title_, &Window::onMouse, this);
 }
 
 Window::~Window() { cv::destroyWindow(title_); }
 
 void Window::show(const Img& frame) {
-    WindowSize live = contentSize();
-    const cv::Mat& pixels = frame.get_mat();
-    if (live.width <= 0 || live.height <= 0 ||
-        (pixels.cols == live.width && pixels.rows == live.height)) {
-        cv::imshow(title_, pixels);
-        return;
-    }
-
-    cv::imshow(title_, fitToSize(frame, live).get_mat());
+    cv::imshow(title_, frame.get_mat());
+    shown_ = true;
 }
 
-int Window::waitKey(int waitMs) const { return cv::waitKey(waitMs); }
+int Window::waitKey(int waitMs) {
+    int key = cv::waitKey(waitMs);
+    measurable_ = shown_;
+    return key;
+}
 
-WindowSize Window::contentSize() const {
+std::optional<WindowSize> Window::contentSize() const {
+    if (!measurable_) return std::nullopt;
+
     cv::Rect rect = cv::getWindowImageRect(title_);
-    return {rect.width, rect.height};
-}
-
-void Window::resizeTo(WindowSize size) {
-    cv::resizeWindow(title_, size.width, size.height);
+    if (rect.width <= 0 || rect.height <= 0) return std::nullopt;
+    return WindowSize{rect.width, rect.height};
 }
 
 std::vector<MouseEvent> Window::takeMouseEvents() {

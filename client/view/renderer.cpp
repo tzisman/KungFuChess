@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include "view/theme.hpp"
+
 namespace kfc::view {
 namespace {
 
@@ -36,13 +38,23 @@ constexpr int kOverlayThickness = 2;
 constexpr int kOverlayOutlineThickness = 6;
 constexpr int kOverlayMarginBelowTop = 30;
 
-const cv::Scalar kCanvasColour{240, 240, 240, 255};
-const cv::Scalar kPanelTextColour{20, 20, 20, 255};
 constexpr int kPanelTextThickness = 1;
 constexpr char kNameLabel[] = "Name: ";
 constexpr char kScoreLabel[] = "Score: ";
 constexpr char kTimeHeader[] = "Time";
 constexpr char kMoveHeader[] = "Move";
+constexpr int kPanelRuleThickness = 1;
+constexpr double kPanelRuleDropFraction = 0.35;
+
+// Files run a, b, c... from the left-hand column; ranks count up from the
+// bottom row, as they are written on a chessboard.
+constexpr char kFirstFileLetter = 'a';
+constexpr double kCoordHeightFraction = 0.5;
+constexpr int kCoordThickness = 1;
+
+constexpr int kBoardBorderGap = 2;
+constexpr double kBoardBorderFraction = 0.16;
+constexpr int kMinBoardBorderThickness = 2;
 
 // A capital of the panel font, measured to turn a wanted text height into the
 // scale the font must be drawn at.
@@ -75,6 +87,8 @@ Img Renderer::render(const GameSnapshot& snapshot, int nowMs,
 
     Img board = background_.clone();
     board.draw_on(canvas, geometry_.origin().x, geometry_.origin().y);
+    drawBoardFrame(canvas);
+    drawCoordinates(canvas);
 
     drawMoveTargets(canvas, snapshot.moveTargets);
     for (const PieceView& piece : snapshot.pieces) {
@@ -86,6 +100,66 @@ Img Renderer::render(const GameSnapshot& snapshot, int nowMs,
     if (snapshot.gameOver) drawGameOver(canvas);
     if (overlayText) drawOverlayText(canvas, *overlayText);
     return canvas;
+}
+
+// Drawn just outside the board's edge, in the gutter the layout keeps for the
+// coordinates, so framing the board never covers a square.
+void Renderer::drawBoardFrame(Img& canvas) const {
+    cv::Mat pixels = canvas.get_mat();
+    int thickness =
+        std::max(kMinBoardBorderThickness,
+                 static_cast<int>(layout_.coordGutter() * kBoardBorderFraction));
+    int inset = kBoardBorderGap + thickness / 2;
+
+    Pixel at = geometry_.origin();
+    cv::rectangle(pixels,
+                  cv::Rect(at.x - inset, at.y - inset,
+                           geometry_.imageWidth() + 2 * inset,
+                           geometry_.imageHeight() + 2 * inset),
+                  kBoardBorderColour, thickness, cv::LINE_AA);
+}
+
+// Labels are written on all four sides so a square can be read off without
+// tracing back to a far corner, and each one is placed from the geometry's own
+// cell positions, so they stay aligned at any board size or grid shape.
+void Renderer::drawCoordinates(Img& canvas) const {
+    double scale = coordFontScale();
+    Pixel at = geometry_.origin();
+    int half = layout_.coordGutter() / 2;
+    int above = at.y - half;
+    int below = at.y + geometry_.imageHeight() + half;
+    int left = at.x - half;
+    int right = at.x + geometry_.imageWidth() + half;
+
+    for (int col = 0; col < geometry_.cols(); ++col) {
+        int x = geometry_.topLeftOf({0, col}).x + geometry_.cellWidth() / 2;
+        std::string file(1, static_cast<char>(kFirstFileLetter + col));
+        drawCoordLabel(canvas, file, {x, above}, scale);
+        drawCoordLabel(canvas, file, {x, below}, scale);
+    }
+    for (int row = 0; row < geometry_.rows(); ++row) {
+        int y = geometry_.topLeftOf({row, 0}).y + geometry_.cellHeight() / 2;
+        std::string rank = std::to_string(geometry_.rows() - row);
+        drawCoordLabel(canvas, rank, {left, y}, scale);
+        drawCoordLabel(canvas, rank, {right, y}, scale);
+    }
+}
+
+void Renderer::drawCoordLabel(Img& canvas, const std::string& label,
+                              Pixel centre, double scale) const {
+    int baseline = 0;
+    cv::Size size =
+        cv::getTextSize(label, kTextFont, scale, kCoordThickness, &baseline);
+    canvas.put_text(label, centre.x - size.width / 2,
+                    centre.y + size.height / 2, scale, kCoordTextColour,
+                    kCoordThickness);
+}
+
+double Renderer::coordFontScale() const {
+    int baseline = 0;
+    cv::Size unit = cv::getTextSize(kFontHeightSample, kTextFont, 1.0,
+                                    kCoordThickness, &baseline);
+    return layout_.coordGutter() * kCoordHeightFraction / unit.height;
 }
 
 double Renderer::fontScale() const {
@@ -122,7 +196,21 @@ void Renderer::drawPanel(Img& canvas, const PlayerView& player,
     drawLine(canvas, kMoveHeader,
              {at.x + layout_.moveColumnX(),
               at.y + layout_.lineY(layout_.headerLine())});
+    drawPanelRule(canvas, at);
     drawMoveTable(canvas, player.moves, at);
+}
+
+// Separates the column headers from the moves beneath them, so a long log
+// reads as a table rather than as one unbroken run of lines.
+void Renderer::drawPanelRule(Img& canvas, Pixel at) const {
+    cv::Mat pixels = canvas.get_mat();
+    int y = at.y + layout_.lineY(layout_.headerLine()) +
+            static_cast<int>(layout_.lineHeight() * kPanelRuleDropFraction);
+    int left = at.x + layout_.timeColumnX();
+    int right = at.x + layout_.panelWidth() - layout_.timeColumnX();
+
+    cv::line(pixels, cv::Point(left, y), cv::Point(right, y), kPanelRuleColour,
+             kPanelRuleThickness, cv::LINE_AA);
 }
 
 // Only the newest actions fit once a game runs long, so the table shows the

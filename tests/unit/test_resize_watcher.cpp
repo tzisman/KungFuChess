@@ -53,11 +53,3 @@ TEST_CASE("a still-changing size restarts the settle timer") {
     CHECK(settled->width == 950);
     CHECK(settled->height == 720);
 }
-
-TEST_CASE("reset adopts a size as already settled, without reporting it") {
-    ResizeWatcher watcher{WindowSize{800, 600}};
-
-    watcher.reset(WindowSize{900, 700});
-
-    CHECK_FALSE(watcher.poll(WindowSize{900, 700}, 1000).has_value());
-}

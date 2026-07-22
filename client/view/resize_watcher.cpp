@@ -23,10 +23,4 @@ std::optional<WindowSize> ResizeWatcher::poll(WindowSize current,
     return settled_;
 }
 
-void ResizeWatcher::reset(WindowSize size) {
-    pending_ = size;
-    settled_ = size;
-    msPendingHeld_ = 0;
-}
-
 }

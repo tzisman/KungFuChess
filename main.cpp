@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "app/composition.hpp"
+#include "app/controller_factory.hpp"
 #include "engine/game_engine.hpp"
 #include "input/controller.hpp"
 #include "input/engine_command_sink.hpp"

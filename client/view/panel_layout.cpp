@@ -1,5 +1,6 @@
 #include "view/panel_layout.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 namespace kfc::view {
@@ -10,7 +11,8 @@ int scale(int base, double fraction) {
 }
 
 
-constexpr double kPanelWidthFraction = 0.42;
+constexpr double kPanelWidthFraction = 0.34;
+constexpr double kCoordGutterFraction = 0.055;
 constexpr int kLinesPerPanel = 24;
 constexpr double kTextHeightFraction = 0.6;
 constexpr double kTimeColumnFraction = 0.07;
@@ -24,20 +26,47 @@ constexpr int kFirstMoveLine = 4;
 }  // namespace
 
 PanelLayout::PanelLayout(int boardWidth, int boardHeight)
+    : PanelLayout(boardWidth, boardHeight, 0, 0) {}
+
+PanelLayout::PanelLayout(int boardWidth, int boardHeight, int canvasWidth,
+                         int canvasHeight)
     : boardWidth_(boardWidth),
       boardHeight_(boardHeight),
-      panelWidth_(scale(boardWidth, kPanelWidthFraction)) {}
+      panelWidth_(scale(boardWidth, kPanelWidthFraction)),
+      coordGutter_(scale(boardHeight, kCoordGutterFraction)) {
+    canvasWidth_ = std::max(canvasWidth, naturalWidth());
+    canvasHeight_ = std::max(canvasHeight, naturalHeight());
+}
 
-int PanelLayout::canvasWidth() const { return boardWidth_ + 2 * panelWidth_; }
+int PanelLayout::naturalWidth() const {
+    return boardWidth_ + 2 * panelWidth_ + 2 * coordGutter_;
+}
 
-int PanelLayout::canvasHeight() const { return boardHeight_; }
+int PanelLayout::naturalHeight() const {
+    return boardHeight_ + 2 * coordGutter_;
+}
 
-Pixel PanelLayout::boardOrigin() const { return {panelWidth_, 0}; }
+Pixel PanelLayout::margin() const {
+    return {(canvasWidth_ - naturalWidth()) / 2,
+            (canvasHeight_ - naturalHeight()) / 2};
+}
 
-Pixel PanelLayout::leftPanelOrigin() const { return {0, 0}; }
+Pixel PanelLayout::boardOrigin() const {
+    Pixel at = margin();
+    return {at.x + panelWidth_ + coordGutter_, at.y + coordGutter_};
+}
+
+// The panels start level with the board's top edge rather than the canvas's,
+// so a panel's first line and the board's first rank read as one row.
+Pixel PanelLayout::leftPanelOrigin() const {
+    Pixel at = margin();
+    return {at.x, at.y + coordGutter_};
+}
 
 Pixel PanelLayout::rightPanelOrigin() const {
-    return {panelWidth_ + boardWidth_, 0};
+    Pixel at = margin();
+    return {at.x + panelWidth_ + boardWidth_ + 2 * coordGutter_,
+            at.y + coordGutter_};
 }
 
 int PanelLayout::nameLine() const { return kNameLine; }

@@ -1,18 +1,12 @@
 #pragma once
 
-#include <optional>
 #include <string>
-#include <utility>
 
 #include "img.hpp"
-#include "input/board_mapper.hpp"
-#include "input/command_sink.hpp"
-#include "input/controller.hpp"
-#include "model/board.hpp"
-#include "model/piece.hpp"
 #include "view/board_geometry.hpp"
 #include "view/panel_layout.hpp"
 #include "view/renderer.hpp"
+#include "view/resize_watcher.hpp"
 #include "view/sprite_library.hpp"
 
 namespace kfc::app {
@@ -29,6 +23,14 @@ struct Presentation {
 
 Presentation buildPresentation(const std::string& boardImagePath,
                                int targetSize);
+
+// The presentation drawn at the largest size whose whole canvas — board,
+// coordinate gutter and both panels — still fits inside content. Building to
+// fit is what lets the window be left exactly where the user dragged it: the
+// frame never has to be rescaled again on its way to the screen, so it stays
+// crisp without the window being snapped to some size of the view's choosing.
+Presentation buildPresentationToFit(const std::string& boardImagePath,
+                                    view::WindowSize content);
 
 // The board-and-sprite half of the presentation. It additionally needs the
 // match's grid dimensions, so it can only be built once those are known
@@ -52,21 +54,5 @@ struct GameView {
     view::SpriteLibrary sprites;
     view::Renderer renderer;
 };
-
-// The one place the click-to-command path is wired, shared by both composition
-// roots so they cannot drift in how a pixel reaches the game. The command sink
-// is supplied by the caller and must outlive the returned controller. myColor
-// is left unset offline; the networked client passes its assigned colour, or
-// leaves it unset with interactive=false for a spectator (who has no colour
-// but, unlike offline hotseat play, must not be able to move anything).
-inline input::Controller makeController(
-    const model::Board& board, input::CommandSink& commands,
-    view::BoardGeometry geometry,
-    std::optional<model::Color> myColor = std::nullopt,
-    bool interactive = true) {
-    return input::Controller{board, commands,
-                             input::BoardMapper{std::move(geometry)}, myColor,
-                             interactive};
-}
 
 }

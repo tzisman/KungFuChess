@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "app/composition.hpp"
+#include "app/controller_factory.hpp"
 #include "engine/game_engine.hpp"
 #include "input/controller.hpp"
 #include "input/engine_command_sink.hpp"
@@ -33,7 +34,7 @@ constexpr char kWindowTitle[] = "KungFuChess";
 // How large the board is drawn on screen at startup; everything else is
 // measured from it. The window is user-resizable from there on — see
 // handleResize below.
-constexpr int kBoardDisplaySize = 435;
+constexpr int kBoardDisplaySize = 700;
 
 constexpr int kFrameDelayMs = 30;
 constexpr int kQuitKey = 27;  // Esc
@@ -91,15 +92,11 @@ int elapsedMsSince(Clock::time_point& last) {
     return elapsed;
 }
 
-// Checks whether the window has settled at a new size and, if so, rebuilds
-// the game view in place at that size and re-points the controller's click
-// mapping to match. Finishes by snapping the window to the exact natural
-// size for the new height, so what's on screen is never a stretched or
-// letterboxed copy of what was actually rendered — then re-syncs the watcher
-// from the size the window actually reports afterward, not the size that was
-// requested, since the two can differ (DPI scaling, border/title-bar insets)
-// and seeding from the request instead of reality reads as a fresh resize
-// every cycle, drifting the window further on every frame.
+// Checks whether the window has settled at a new size and, if so, rebuilds the
+// game view in place to fit that size and re-points the controller's click
+// mapping to match. The window itself is deliberately left alone: sizing it
+// from here would come straight back through the watcher as a fresh resize,
+// rebuilding the view again on a window nobody had touched.
 void handleResize(kfc::view::Window& window, kfc::view::ResizeWatcher& watcher,
                   int elapsedMs, const std::string& boardImagePath,
                   const std::string& piecesRoot,
@@ -107,19 +104,16 @@ void handleResize(kfc::view::Window& window, kfc::view::ResizeWatcher& watcher,
                   kfc::app::Presentation& presentation,
                   std::optional<kfc::app::GameView>& gameView,
                   kfc::input::Controller& controller) {
-    std::optional<kfc::view::WindowSize> settled =
-        watcher.poll(window.contentSize(), elapsedMs);
+    std::optional<kfc::view::WindowSize> live = window.contentSize();
+    if (!live) return;
+
+    std::optional<kfc::view::WindowSize> settled = watcher.poll(*live, elapsedMs);
     if (!settled) return;
 
-    presentation = kfc::app::buildPresentation(boardImagePath, settled->height);
+    presentation = kfc::app::buildPresentationToFit(boardImagePath, *settled);
     gameView.emplace(boardImagePath, piecesRoot, presentation, board.width(),
                      board.height());
     controller.setGeometry(gameView->geometry);
-
-    kfc::view::WindowSize natural{presentation.layout.canvasWidth(),
-                                  presentation.layout.canvasHeight()};
-    window.resizeTo(natural);
-    watcher.reset(window.contentSize());
 }
 
 }  // namespace
@@ -149,7 +143,9 @@ int main() {
         std::optional<kfc::app::GameView> gameView;
         gameView.emplace(kBoardImagePath, kPiecesRoot, presentation,
                          board.width(), board.height());
-        kfc::view::Window window{kWindowTitle};
+        kfc::view::Window window{kWindowTitle,
+                                 {presentation.layout.canvasWidth(),
+                                  presentation.layout.canvasHeight()}};
         kfc::view::ResizeWatcher resizeWatcher{
             {presentation.layout.canvasWidth(),
              presentation.layout.canvasHeight()}};
@@ -177,10 +173,6 @@ int main() {
                                          moveLog),
                 nowMs));
 
-            // Checked only after a frame has actually been shown: a
-            // WINDOW_NORMAL window adopts the size of the first image shown
-            // into it, so this is the first point at which its content size
-            // reliably reflects something real rather than a toolkit default.
             handleResize(window, resizeWatcher, elapsed, kBoardImagePath,
                         kPiecesRoot, board, presentation, gameView, controller);
 

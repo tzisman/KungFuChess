@@ -16,7 +16,9 @@ namespace {
 constexpr char kBoardImagePath[] = "images/board.png";
 constexpr char kPiecesRoot[] = "images/pieces3";
 constexpr char kWindowTitle[] = "KungFuChess (client)";
-constexpr int kBoardDisplaySize = 435;
+// How large the board is drawn on startup; every other measurement follows
+// from it. The window is user-resizable from there — see handleResize.
+constexpr int kBoardDisplaySize = 700;
 constexpr int kFrameDelayMs = 30;
 constexpr int kQuitKey = 27;  // Esc
 constexpr char kWaitingForOpponentStatus[] = "Waiting for an opponent...";
@@ -75,7 +77,8 @@ ClientApp::ClientApp(NetworkSession& session, input::CommandSink& commands,
       log_(log),
       myRating_(myRating),
       presentation_(buildPresentation(kBoardImagePath, kBoardDisplaySize)),
-      window_(kWindowTitle),
+      window_(kWindowTitle, {presentation_.layout.canvasWidth(),
+                             presentation_.layout.canvasHeight()}),
       lobbyRenderer_(presentation_.layout.canvasWidth(), presentation_.layout.canvasHeight()),
       roomPromptRenderer_(presentation_.layout.canvasWidth(),
                           presentation_.layout.canvasHeight()),
@@ -96,10 +99,6 @@ void ClientApp::run() {
             renderGame();
         }
 
-        // Checked only after a frame has actually been shown: a WINDOW_NORMAL
-        // window adopts the size of the first image shown into it, so this is
-        // the first point at which its content size reliably reflects
-        // something real rather than a toolkit default.
         handleResize();
 
         int key = window_.waitKey(kFrameDelayMs);
@@ -197,15 +196,22 @@ void ClientApp::renderGame() {
         elapsedMsSince(start_), overlayText));
 }
 
+// Once a drag has settled, every screen is rebuilt to the largest size that
+// fits where the user left the window. The window itself is deliberately left
+// alone: sizing it from here would come straight back through the watcher as
+// a fresh resize, rebuilding the view again on a window nobody had touched.
 void ClientApp::handleResize() {
+    std::optional<view::WindowSize> live = window_.contentSize();
+    if (!live) return;
+
     std::optional<view::WindowSize> settled =
-        resizeWatcher_.poll(window_.contentSize(), kFrameDelayMs);
+        resizeWatcher_.poll(*live, kFrameDelayMs);
     if (!settled) return;
 
     int boardCols = gameView_ ? gameView_->geometry.cols() : 0;
     int boardRows = gameView_ ? gameView_->geometry.rows() : 0;
 
-    presentation_ = buildPresentation(kBoardImagePath, settled->height);
+    presentation_ = buildPresentationToFit(kBoardImagePath, *settled);
     lobbyRenderer_ = view::LobbyRenderer{presentation_.layout.canvasWidth(),
                                         presentation_.layout.canvasHeight()};
     roomPromptRenderer_ = view::TextPromptRenderer{presentation_.layout.canvasWidth(),
@@ -215,11 +221,6 @@ void ClientApp::handleResize() {
         gameView_.emplace(kBoardImagePath, kPiecesRoot, presentation_, boardCols, boardRows);
         controller_->setGeometry(gameView_->geometry);
     }
-
-    view::WindowSize natural{presentation_.layout.canvasWidth(),
-                             presentation_.layout.canvasHeight()};
-    window_.resizeTo(natural);
-    resizeWatcher_.reset(window_.contentSize());
 }
 
 }

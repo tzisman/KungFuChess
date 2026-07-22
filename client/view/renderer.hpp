@@ -30,6 +30,11 @@ public:
 
 private:
     static Animation animationFor(model::PieceState state);
+    void drawBoardFrame(Img& canvas) const;
+    void drawCoordinates(Img& canvas) const;
+    void drawCoordLabel(Img& canvas, const std::string& label, Pixel centre,
+                        double scale) const;
+    double coordFontScale() const;
     void drawPiece(Img& canvas, const PieceView& piece, int nowMs) const;
     Pixel centeredIn(Pixel cellTopLeft, const Img& sprite) const;
     void drawRestBar(Img& canvas, const PieceView& piece) const;
@@ -40,6 +45,7 @@ private:
     void drawOverlayText(Img& canvas, const std::string& text) const;
     void drawPanels(Img& canvas, const std::vector<PlayerView>& players) const;
     void drawPanel(Img& canvas, const PlayerView& player, Pixel at) const;
+    void drawPanelRule(Img& canvas, Pixel at) const;
     void drawMoveTable(Img& canvas, const std::vector<MoveLine>& moves,
                        Pixel at) const;
     void drawLine(Img& canvas, const std::string& text, Pixel at) const;

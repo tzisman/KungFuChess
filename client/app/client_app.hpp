@@ -5,6 +5,7 @@
 #include <string>
 
 #include "app/composition.hpp"
+#include "app/controller_factory.hpp"
 #include "app/network_session.hpp"
 #include "common/logger.hpp"
 #include "input/command_sink.hpp"
